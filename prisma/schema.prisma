@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Employee {
+  id             Int      @id @default(autoincrement())
+  telegramUserId String   @unique
+  username       String?
+  firstName      String?
+  lastName       String?
+  displayName    String
+  isActive       Boolean  @default(true)
+  roleOverride   EmployeeRoleOverride @default(DEFAULT)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  shifts         Shift[]
+  pendingActions PendingAction[]
+}
+
+model Shift {
+  id              Int           @id @default(autoincrement())
+  employeeId      Int
+  employee        Employee      @relation(fields: [employeeId], references: [id])
+  startTime       DateTime
+  endTime         DateTime?
+  startPhotoFileId String?
+  endPhotoFileId  String?
+  startMessageId  Int
+  startChatId     String
+  employeeChatId  String?
+  endMessageId    Int?
+  endChatId       String?
+  closedReason    ClosedReason?
+  autoClosedAt    DateTime?
+  alertedAt       DateTime?
+  durationMinutes Int?
+  photosPurgedAt  DateTime?
+  createdAt       DateTime      @default(now())
+  violations      ShiftViolation[]
+
+  @@index([employeeId, endTime])
+  @@index([startTime])
+  @@index([employeeId])
+  @@unique([startChatId, startMessageId])
+  @@unique([endChatId, endMessageId])
+}
+
+model ShiftViolation {
+  id        Int           @id @default(autoincrement())
+  shiftId   Int
+  shift     Shift         @relation(fields: [shiftId], references: [id])
+  type      ViolationType
+  createdAt DateTime      @default(now())
+
+  @@unique([shiftId, type])
+  @@index([type, createdAt])
+}
+
+model PendingAction {
+  id             Int                  @id @default(autoincrement())
+  employeeId     Int
+  employee       Employee             @relation(fields: [employeeId], references: [id])
+  telegramUserId String
+  chatId         String
+  actionType     PendingActionType
+  photoFileId    String
+  photoMessageId Int
+  createdAt      DateTime             @default(now())
+  expiresAt      DateTime
+  status         PendingActionStatus  @default(PENDING)
+  updatedAt      DateTime             @updatedAt
+
+  @@unique([chatId, photoMessageId])
+  @@index([telegramUserId, status])
+  @@index([expiresAt])
+}
+
+model Admin {
+  id             Int      @id @default(autoincrement())
+  telegramUserId String   @unique
+  createdAt      DateTime @default(now())
+}
+
+model UserSession {
+  id             Int      @id @default(autoincrement())
+  telegramUserId String   @unique
+  mode           UserMode
+  updatedAt      DateTime @updatedAt
+}
+
+enum ClosedReason {
+  USER_PHOTO
+  AUTO_TIMEOUT
+}
+
+enum ViolationType {
+  NOT_CLOSED_IN_TIME
+  SHORT_SHIFT
+}
+
+enum PendingActionType {
+  START
+  END
+}
+
+enum PendingActionStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
+enum EmployeeRoleOverride {
+  DEFAULT
+  FORCE_EMPLOYEE
+  FORCE_ADMIN
+  BOTH
+}
+
+enum UserMode {
+  ADMIN
+  EMPLOYEE
+}

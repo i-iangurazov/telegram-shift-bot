@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "ViolationType" ADD VALUE IF NOT EXISTS 'SHORT_SHIFT';

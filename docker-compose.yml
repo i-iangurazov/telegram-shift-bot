@@ -1,0 +1,27 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: shift-bot-db
+    environment:
+      POSTGRES_DB: shift_bot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - shift-bot-db:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  bot:
+    build: .
+    container_name: shift-bot-app
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/shift_bot?schema=public
+    depends_on:
+      - db
+    command: ["sh", "-c", "pnpm run prisma:migrate && pnpm run start"]
+
+volumes:
+  shift-bot-db:
