@@ -5,6 +5,7 @@ import { ReportService } from "../services/reportService";
 import { AdminService } from "../services/adminService";
 import { RoleService } from "../services/roleService";
 import { EmployeeRepository } from "../repositories/employeeRepository";
+import { UserSessionRepository } from "../repositories/userSessionRepository";
 import { ExportService } from "../services/exportService";
 import { PendingActionService } from "../services/pendingActionService";
 import { PhotoReviewService } from "../services/photoReviewService";
@@ -26,13 +27,14 @@ export const createBot = (deps: {
   adminService: AdminService;
   roleService: RoleService;
   employeeRepo: EmployeeRepository;
+  userSessionRepo: UserSessionRepository;
   exportService: ExportService;
   pendingActionService: PendingActionService;
   photoReviewService: PhotoReviewService;
 }): Telegraf => {
   const bot = new Telegraf(env.telegramBotToken);
 
-  registerStartCommand(bot, deps.roleService);
+  registerStartCommand(bot, deps.roleService, deps.employeeRepo, deps.userSessionRepo);
   registerStatusCommand(bot, deps.shiftService, deps.roleService);
   registerWhoamiCommand(bot);
   registerHelpCommand(bot, deps.roleService);
@@ -49,7 +51,7 @@ export const createBot = (deps: {
   registerAdminReportFlow(bot, deps.adminService, deps.reportService, deps.exportService);
   registerPhotoHandler(bot, deps.roleService, deps.pendingActionService);
   registerPendingActionHandlers(bot, deps.pendingActionService, deps.adminService);
-  registerTextHandler(bot, deps.roleService);
+  registerTextHandler(bot, deps.roleService, deps.employeeRepo, deps.userSessionRepo, deps.pendingActionService);
 
   return bot;
 };

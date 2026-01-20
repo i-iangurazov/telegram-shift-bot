@@ -7,6 +7,7 @@ type DbClient = Prisma.TransactionClient;
 export interface PendingActionRepository {
   findById(id: number, tx?: DbClient): Promise<PendingActionRecord | null>;
   findByChatMessage(chatId: string, messageId: number, tx?: DbClient): Promise<PendingActionRecord | null>;
+  hasActiveForUser(telegramUserId: string, now: Date): Promise<boolean>;
   createPendingAction(data: {
     employeeId: number;
     telegramUserId: string;
@@ -33,6 +34,19 @@ export class PrismaPendingActionRepository implements PendingActionRepository {
     return client.pendingAction.findUnique({
       where: { chatId_photoMessageId: { chatId, photoMessageId: messageId } }
     });
+  }
+
+  async hasActiveForUser(telegramUserId: string, now: Date): Promise<boolean> {
+    const pending = await prisma.pendingAction.findFirst({
+      where: {
+        telegramUserId,
+        status: PendingActionStatus.PENDING,
+        expiresAt: { gt: now }
+      },
+      select: { id: true }
+    });
+
+    return Boolean(pending);
   }
 
   async createPendingAction(data: {

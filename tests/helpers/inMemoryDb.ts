@@ -26,7 +26,7 @@ export class InMemoryDatabase {
   violations: ShiftViolationRecord[] = [];
   pendingActions: PendingActionRecord[] = [];
   admins = new Set<string>();
-  sessions: { telegramUserId: string; mode: UserMode }[] = [];
+  sessions: { telegramUserId: string; mode: UserMode; nameRequestedAt: Date | null }[] = [];
   nextEmployeeId = 1;
   nextShiftId = 1;
   nextViolationId = 1;
@@ -45,9 +45,15 @@ export class InMemoryEmployeeRepository implements EmployeeRepository {
 
     if (existing) {
       existing.username = user.username ?? null;
-      existing.firstName = user.firstName ?? null;
-      existing.lastName = user.lastName ?? null;
-      existing.displayName = displayName;
+      if (!existing.firstName?.trim() && user.firstName) {
+        existing.firstName = user.firstName;
+      }
+      if (!existing.lastName?.trim() && user.lastName) {
+        existing.lastName = user.lastName;
+      }
+      if (!existing.displayName?.trim()) {
+        existing.displayName = displayName;
+      }
       return existing;
     }
 
@@ -103,6 +109,21 @@ export class InMemoryEmployeeRepository implements EmployeeRepository {
     const items = filtered.slice(start, start + pageSize);
     return { items, total: filtered.length };
   }
+
+  async updateNameByTelegramUserId(telegramUserId: string, data: {
+    firstName: string;
+    lastName: string;
+    displayName: string;
+  }): Promise<EmployeeRecord | null> {
+    const employee = this.db.employees.find((item) => item.telegramUserId === telegramUserId);
+    if (!employee) {
+      return null;
+    }
+    employee.firstName = data.firstName;
+    employee.lastName = data.lastName;
+    employee.displayName = data.displayName;
+    return employee;
+  }
 }
 
 export class InMemoryAdminRepository implements AdminRepository {
@@ -128,7 +149,7 @@ export class InMemoryAdminRepository implements AdminRepository {
 export class InMemoryUserSessionRepository implements UserSessionRepository {
   constructor(private db: InMemoryDatabase) {}
 
-  async getSession(userId: string): Promise<{ telegramUserId: string; mode: UserMode } | null> {
+  async getSession(userId: string): Promise<{ telegramUserId: string; mode: UserMode; nameRequestedAt: Date | null } | null> {
     return this.db.sessions.find((session) => session.telegramUserId === userId) ?? null;
   }
 
@@ -138,7 +159,23 @@ export class InMemoryUserSessionRepository implements UserSessionRepository {
       existing.mode = mode;
       return;
     }
-    this.db.sessions.push({ telegramUserId: userId, mode });
+    this.db.sessions.push({ telegramUserId: userId, mode, nameRequestedAt: null });
+  }
+
+  async setNameRequestedAt(userId: string, requestedAt: Date = new Date()): Promise<void> {
+    const existing = this.db.sessions.find((session) => session.telegramUserId === userId);
+    if (existing) {
+      existing.nameRequestedAt = requestedAt;
+      return;
+    }
+    this.db.sessions.push({ telegramUserId: userId, mode: UserMode.EMPLOYEE, nameRequestedAt: requestedAt });
+  }
+
+  async clearNameRequestedAt(userId: string): Promise<void> {
+    const existing = this.db.sessions.find((session) => session.telegramUserId === userId);
+    if (existing) {
+      existing.nameRequestedAt = null;
+    }
   }
 }
 
@@ -481,6 +518,15 @@ export class InMemoryPendingActionRepository implements PendingActionRepository 
     return this.db.pendingActions.find(
       (item) => item.chatId === chatId && item.photoMessageId === messageId
     ) ?? null;
+  }
+
+  async hasActiveForUser(telegramUserId: string, now: Date): Promise<boolean> {
+    return this.db.pendingActions.some(
+      (item) =>
+        item.telegramUserId === telegramUserId
+        && item.status === PendingActionStatus.PENDING
+        && item.expiresAt > now
+    );
   }
 
   async createPendingAction(data: {

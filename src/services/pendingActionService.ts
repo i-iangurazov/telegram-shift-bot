@@ -246,6 +246,10 @@ export class PendingActionService {
     return this.pendingRepo.expirePendingActions(now, limit);
   }
 
+  async hasActivePendingAction(telegramUserId: string, now: Date = new Date()): Promise<boolean> {
+    return this.pendingRepo.hasActiveForUser(telegramUserId, now);
+  }
+
   private async applyShortShiftViolation(
     shiftId: number,
     durationMinutes: number | null,

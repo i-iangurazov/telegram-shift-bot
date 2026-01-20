@@ -6,6 +6,11 @@ export interface EmployeeRepository {
   findByTelegramUserId(telegramUserId: string): Promise<EmployeeRecord | null>;
   findById(id: number): Promise<EmployeeRecord | null>;
   findByIds(ids: number[]): Promise<EmployeeRecord[]>;
+  updateNameByTelegramUserId(telegramUserId: string, data: {
+    firstName: string;
+    lastName: string;
+    displayName: string;
+  }): Promise<EmployeeRecord | null>;
   listEmployees(params: { page: number; pageSize: number; query?: string }): Promise<{
     items: EmployeeRecord[];
     total: number;
@@ -23,27 +28,49 @@ const buildDisplayName = (user: TelegramUserInput): string => {
   return `user:${user.id}`;
 };
 
+const isBlank = (value?: string | null): boolean => !value || value.trim().length === 0;
+
 export class PrismaEmployeeRepository implements EmployeeRepository {
   async upsertFromTelegram(user: TelegramUserInput): Promise<EmployeeRecord> {
+    const telegramUserId = String(user.id);
     const displayName = buildDisplayName(user);
-    const record = await prisma.employee.upsert({
-      where: { telegramUserId: String(user.id) },
-      create: {
-        telegramUserId: String(user.id),
-        username: user.username ?? null,
-        firstName: user.firstName ?? null,
-        lastName: user.lastName ?? null,
-        displayName
-      },
-      update: {
-        username: user.username ?? null,
-        firstName: user.firstName ?? null,
-        lastName: user.lastName ?? null,
-        displayName
-      }
-    });
+    const existing = await prisma.employee.findUnique({ where: { telegramUserId } });
 
-    return record;
+    if (!existing) {
+      return prisma.employee.create({
+        data: {
+          telegramUserId,
+          username: user.username ?? null,
+          firstName: user.firstName ?? null,
+          lastName: user.lastName ?? null,
+          displayName
+        }
+      });
+    }
+
+    const update: {
+      username: string | null;
+      firstName?: string | null;
+      lastName?: string | null;
+      displayName?: string;
+    } = {
+      username: user.username ?? null
+    };
+
+    if (isBlank(existing.firstName) && user.firstName) {
+      update.firstName = user.firstName;
+    }
+    if (isBlank(existing.lastName) && user.lastName) {
+      update.lastName = user.lastName;
+    }
+    if (isBlank(existing.displayName)) {
+      update.displayName = displayName;
+    }
+
+    return prisma.employee.update({
+      where: { telegramUserId },
+      data: update
+    });
   }
 
   async findByTelegramUserId(telegramUserId: string): Promise<EmployeeRecord | null> {
@@ -95,5 +122,26 @@ export class PrismaEmployeeRepository implements EmployeeRepository {
     ]);
 
     return { total, items };
+  }
+
+  async updateNameByTelegramUserId(telegramUserId: string, data: {
+    firstName: string;
+    lastName: string;
+    displayName: string;
+  }): Promise<EmployeeRecord | null> {
+    const updated = await prisma.employee.updateMany({
+      where: { telegramUserId },
+      data: {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        displayName: data.displayName
+      }
+    });
+
+    if (updated.count === 0) {
+      return null;
+    }
+
+    return prisma.employee.findUnique({ where: { telegramUserId } });
   }
 }

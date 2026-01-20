@@ -90,6 +90,7 @@ model UserSession {
   id             Int      @id @default(autoincrement())
   telegramUserId String   @unique
   mode           UserMode
+  nameRequestedAt DateTime?
   updatedAt      DateTime @updatedAt
 }
 

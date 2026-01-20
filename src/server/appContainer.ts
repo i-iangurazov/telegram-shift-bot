@@ -19,6 +19,7 @@ export interface AppContainer {
   prisma: typeof prisma;
   bot: ReturnType<typeof createBot>;
   employeeRepo: PrismaEmployeeRepository;
+  userSessionRepo: PrismaUserSessionRepository;
   shiftRepo: PrismaShiftRepository;
   shiftService: ShiftService;
   adminService: AdminService;
@@ -78,6 +79,7 @@ export const getApp = async (): Promise<AppContainer> => {
         adminService,
         roleService,
         employeeRepo,
+        userSessionRepo,
         exportService,
         pendingActionService,
         photoReviewService
@@ -87,6 +89,7 @@ export const getApp = async (): Promise<AppContainer> => {
         prisma,
         bot,
         employeeRepo,
+        userSessionRepo,
         shiftRepo,
         shiftService,
         adminService,
