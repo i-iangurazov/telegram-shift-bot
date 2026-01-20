@@ -4,6 +4,7 @@ import { RoleService } from "../src/services/roleService";
 import { PendingActionService } from "../src/services/pendingActionService";
 import { registerStartCommand } from "../src/bot/handlers/startCommand";
 import { registerTextHandler } from "../src/bot/handlers/textHandler";
+import { registerFullNameCommand } from "../src/bot/handlers/fullNameCommand";
 import { messages } from "../src/bot/messages";
 import {
   InMemoryAdminRepository,
@@ -54,6 +55,7 @@ const buildBot = () => {
   replySink = replies;
 
   registerStartCommand(bot, roleService, employeeRepo, sessionRepo);
+  registerFullNameCommand(bot, roleService, employeeRepo, sessionRepo);
   registerTextHandler(bot, roleService, employeeRepo, sessionRepo, pendingActionService);
 
   return { bot, replies, employeeRepo, adminRepo, sessionRepo };
@@ -138,5 +140,32 @@ describe("Employee onboarding", () => {
     await sendTextUpdate(bot, { userId: 200, text: "/start", firstName: "Админ", lastName: "Тест" });
 
     expect(replies).toEqual([messages.startAdmin]);
+  });
+});
+
+describe("Employee fullname command", () => {
+  it("prompts and updates full name", async () => {
+    const { bot, replies, employeeRepo, sessionRepo } = buildBot();
+
+    await sendTextUpdate(bot, { userId: 300, text: "/fullname", firstName: "Ильяс" });
+    expect(replies).toEqual([messages.fullNamePrompt]);
+
+    replies.length = 0;
+    await sendTextUpdate(bot, { userId: 300, text: "Ilias Iangurazov", firstName: "Ильяс" });
+
+    expect(replies).toEqual([messages.fullNameSaved("Ilias Iangurazov")]);
+    const employee = await employeeRepo.findByTelegramUserId("300");
+    expect(employee?.displayName).toBe("Ilias Iangurazov");
+    const session = await sessionRepo.getSession("300");
+    expect(session?.fullNameRequestedAt ?? null).toBeNull();
+  });
+
+  it("rejects admin-only users", async () => {
+    const { bot, replies, adminRepo } = buildBot();
+    await adminRepo.addAdminUserId("400");
+
+    await sendTextUpdate(bot, { userId: 400, text: "/fullname", firstName: "Админ" });
+
+    expect(replies).toEqual([messages.fullNameNotEmployee]);
   });
 });

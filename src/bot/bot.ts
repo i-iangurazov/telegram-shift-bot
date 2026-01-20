@@ -20,6 +20,7 @@ import { registerWhoamiCommand } from "./handlers/whoamiCommand";
 import { registerSetAdminCommand } from "./handlers/setAdminCommand";
 import { registerHelpCommand } from "./handlers/helpCommand";
 import { registerModeCommand } from "./handlers/modeCommand";
+import { registerFullNameCommand } from "./handlers/fullNameCommand";
 
 export const createBot = (deps: {
   shiftService: ShiftService;
@@ -39,6 +40,7 @@ export const createBot = (deps: {
   registerWhoamiCommand(bot);
   registerHelpCommand(bot, deps.roleService);
   registerModeCommand(bot, deps.roleService);
+  registerFullNameCommand(bot, deps.roleService, deps.employeeRepo, deps.userSessionRepo);
   registerSetAdminCommand(bot, deps.adminService);
   registerAdminEmployeesFlow(
     bot,

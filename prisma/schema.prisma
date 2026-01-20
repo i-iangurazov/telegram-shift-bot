@@ -91,6 +91,7 @@ model UserSession {
   telegramUserId String   @unique
   mode           UserMode
   nameRequestedAt DateTime?
+  fullNameRequestedAt DateTime?
   updatedAt      DateTime @updatedAt
 }
 

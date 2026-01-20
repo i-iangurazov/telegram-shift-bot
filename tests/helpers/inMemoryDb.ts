@@ -26,7 +26,12 @@ export class InMemoryDatabase {
   violations: ShiftViolationRecord[] = [];
   pendingActions: PendingActionRecord[] = [];
   admins = new Set<string>();
-  sessions: { telegramUserId: string; mode: UserMode; nameRequestedAt: Date | null }[] = [];
+  sessions: {
+    telegramUserId: string;
+    mode: UserMode;
+    nameRequestedAt: Date | null;
+    fullNameRequestedAt: Date | null;
+  }[] = [];
   nextEmployeeId = 1;
   nextShiftId = 1;
   nextViolationId = 1;
@@ -149,7 +154,12 @@ export class InMemoryAdminRepository implements AdminRepository {
 export class InMemoryUserSessionRepository implements UserSessionRepository {
   constructor(private db: InMemoryDatabase) {}
 
-  async getSession(userId: string): Promise<{ telegramUserId: string; mode: UserMode; nameRequestedAt: Date | null } | null> {
+  async getSession(userId: string): Promise<{
+    telegramUserId: string;
+    mode: UserMode;
+    nameRequestedAt: Date | null;
+    fullNameRequestedAt: Date | null;
+  } | null> {
     return this.db.sessions.find((session) => session.telegramUserId === userId) ?? null;
   }
 
@@ -159,7 +169,7 @@ export class InMemoryUserSessionRepository implements UserSessionRepository {
       existing.mode = mode;
       return;
     }
-    this.db.sessions.push({ telegramUserId: userId, mode, nameRequestedAt: null });
+    this.db.sessions.push({ telegramUserId: userId, mode, nameRequestedAt: null, fullNameRequestedAt: null });
   }
 
   async setNameRequestedAt(userId: string, requestedAt: Date = new Date()): Promise<void> {
@@ -168,13 +178,39 @@ export class InMemoryUserSessionRepository implements UserSessionRepository {
       existing.nameRequestedAt = requestedAt;
       return;
     }
-    this.db.sessions.push({ telegramUserId: userId, mode: UserMode.EMPLOYEE, nameRequestedAt: requestedAt });
+    this.db.sessions.push({
+      telegramUserId: userId,
+      mode: UserMode.EMPLOYEE,
+      nameRequestedAt: requestedAt,
+      fullNameRequestedAt: null
+    });
   }
 
   async clearNameRequestedAt(userId: string): Promise<void> {
     const existing = this.db.sessions.find((session) => session.telegramUserId === userId);
     if (existing) {
       existing.nameRequestedAt = null;
+    }
+  }
+
+  async setFullNameRequestedAt(userId: string, requestedAt: Date = new Date()): Promise<void> {
+    const existing = this.db.sessions.find((session) => session.telegramUserId === userId);
+    if (existing) {
+      existing.fullNameRequestedAt = requestedAt;
+      return;
+    }
+    this.db.sessions.push({
+      telegramUserId: userId,
+      mode: UserMode.EMPLOYEE,
+      nameRequestedAt: null,
+      fullNameRequestedAt: requestedAt
+    });
+  }
+
+  async clearFullNameRequestedAt(userId: string): Promise<void> {
+    const existing = this.db.sessions.find((session) => session.telegramUserId === userId);
+    if (existing) {
+      existing.fullNameRequestedAt = null;
     }
   }
 }
