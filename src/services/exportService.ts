@@ -28,22 +28,22 @@ const mapClosedReason = (reason: ClosedReason | null): string => {
   return "";
 };
 
+const filterViolations = (violations: ViolationType[]): ViolationType[] =>
+  violations.filter((violation) => violation !== ViolationType.SHORT_SHIFT);
+
 const countViolations = (violations: ViolationType[]): {
   notClosedInTime: number;
-  shortShift: number;
   total: number;
 } => {
   let notClosedInTime = 0;
-  let shortShift = 0;
-  for (const violation of violations) {
+  let total = 0;
+  for (const violation of filterViolations(violations)) {
+    total += 1;
     if (violation === ViolationType.NOT_CLOSED_IN_TIME) {
       notClosedInTime += 1;
     }
-    if (violation === ViolationType.SHORT_SHIFT) {
-      shortShift += 1;
-    }
   }
-  return { notClosedInTime, shortShift, total: violations.length };
+  return { notClosedInTime, total };
 };
 
 export class ExportService {
@@ -57,13 +57,13 @@ export class ExportService {
       "durationMinutes",
       "closedReason",
       "notClosedInTimeViolationsCount",
-      "shortShiftViolationsCount",
       "totalViolationsCount",
       "violations"
     ];
 
     const rows = report.shifts.map((shift) => {
-      const counts = countViolations(shift.violations);
+      const visibleViolations = filterViolations(shift.violations);
+      const counts = countViolations(visibleViolations);
       return [
         report.employeeId,
         report.telegramUserId,
@@ -73,9 +73,8 @@ export class ExportService {
         shift.durationMinutes ?? "",
         mapClosedReason(shift.closedReason),
         counts.notClosedInTime,
-        counts.shortShift,
         counts.total,
-        shift.violations.join(",")
+        visibleViolations.join(",")
       ];
     });
 
@@ -97,7 +96,6 @@ export class ExportService {
       "totalMinutes",
       "avgShiftMinutes",
       "notClosedInTimeViolationsCount",
-      "shortShiftViolationsCount",
       "totalViolationsCount",
       "lastShiftStart",
       "lastShiftEnd",
@@ -112,7 +110,6 @@ export class ExportService {
       employee.totalDurationMinutes,
       employee.averageDurationMinutes,
       employee.violationsNotClosedInTime,
-      employee.violationsShortShift,
       employee.violationsTotal,
       employee.lastShiftStart ? formatDateTime(employee.lastShiftStart, tz) : "",
       employee.lastShiftEnd ? formatDateTime(employee.lastShiftEnd, tz) : "",
@@ -147,13 +144,13 @@ export class ExportService {
       "durationMinutes",
       "closedReason",
       "notClosedInTimeViolationsCount",
-      "shortShiftViolationsCount",
       "totalViolationsCount",
       "violations"
     ];
 
     const rows = shifts.map((shift) => {
-      const counts = countViolations(shift.violations);
+      const visibleViolations = filterViolations(shift.violations);
+      const counts = countViolations(visibleViolations);
       return [
         shift.employeeId,
         shift.telegramUserId,
@@ -163,9 +160,8 @@ export class ExportService {
         shift.durationMinutes ?? "",
         mapClosedReason(shift.closedReason),
         counts.notClosedInTime,
-        counts.shortShift,
         counts.total,
-        shift.violations.join(",")
+        visibleViolations.join(",")
       ];
     });
 

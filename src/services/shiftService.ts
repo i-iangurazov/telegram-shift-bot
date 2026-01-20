@@ -1,5 +1,4 @@
 import { ShiftRepository } from "../repositories/shiftRepository";
-import { ViolationType } from "@prisma/client";
 import { EmployeeRepository } from "../repositories/employeeRepository";
 import { EmployeeRecord, ShiftRecord, ShiftWithRelations, TelegramUserInput } from "../domain/types";
 import { Logger } from "../utils/logger";
@@ -99,8 +98,6 @@ export class ShiftService {
       durationMinutes
     });
 
-    await this.applyShortShiftViolation(shift.id, durationMinutes);
-
     return { type: "closed", shift, employee, durationMinutes };
   }
 
@@ -123,22 +120,10 @@ export class ShiftService {
       const durationMinutes = this.config.maxShiftHours * 60;
       const updated = await this.shiftRepo.autoCloseShift(shift.id, endTime, durationMinutes, now);
       if (updated) {
-        await this.applyShortShiftViolation(updated.id, durationMinutes);
         results.push({ shift: updated, endTime, durationMinutes });
       }
     }
 
     return results;
-  }
-
-  private async applyShortShiftViolation(shiftId: number, durationMinutes: number | null): Promise<void> {
-    if (durationMinutes === null) {
-      return;
-    }
-
-    const threshold = this.config.minShiftMinutes - this.config.shortShiftGraceMinutes;
-    if (durationMinutes < threshold) {
-      await this.shiftRepo.createViolation(shiftId, ViolationType.SHORT_SHIFT);
-    }
   }
 }

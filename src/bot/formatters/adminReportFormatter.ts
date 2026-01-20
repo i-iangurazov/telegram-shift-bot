@@ -25,7 +25,6 @@ export const buildEmployeeReportMessage = (report: EmployeeReport, tz: string): 
   lines.push(`Средняя длительность смены: ${formatDurationMinutes(report.averageDurationMinutes)}`);
   lines.push("Нарушения:");
   lines.push(`- Не закрыл(а) смену вовремя: ${report.violationsNotClosedInTime}`);
-  lines.push(`- Смена меньше 8 часов: ${report.violationsShortShift}`);
   lines.push(`- Всего нарушений: ${report.violationsTotal}`);
 
   if (report.shifts.length === 0) {
@@ -68,7 +67,6 @@ export const buildAllEmployeesReportMessage = (report: AllEmployeesReport, tz: s
   lines.push(`Суммарное время: ${formatDurationMinutes(report.totalDurationMinutes)}`);
   lines.push("Нарушения:");
   lines.push(`- Не закрыл(а) вовремя: ${report.violationsNotClosedInTime}`);
-  lines.push(`- Смена меньше 8 часов: ${report.violationsShortShift}`);
   lines.push(`- Всего нарушений: ${report.totalViolations}`);
 
   if (report.topEmployees.length === 0) {
@@ -81,7 +79,7 @@ export const buildAllEmployeesReportMessage = (report: AllEmployeesReport, tz: s
   lines.push("Сотрудники (топ по нарушениям, затем по часам):");
   for (const employee of report.topEmployees) {
     lines.push(
-      `- ${employee.displayName} — смен: ${employee.totalShifts}, время: ${formatDurationMinutes(employee.totalDurationMinutes)}, наруш: ${employee.violationsTotal} (не закрыл: ${employee.violationsNotClosedInTime}, <8ч: ${employee.violationsShortShift})`
+      `- ${employee.displayName} — смен: ${employee.totalShifts}, время: ${formatDurationMinutes(employee.totalDurationMinutes)}, наруш: ${employee.violationsTotal} (не закрыл: ${employee.violationsNotClosedInTime})`
     );
   }
 

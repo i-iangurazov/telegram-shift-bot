@@ -303,7 +303,8 @@ export class PrismaShiftRepository implements ShiftRepository {
   async countEmployeeViolations(employeeId: number, from: Date, to: Date): Promise<number> {
     return prisma.shiftViolation.count({
       where: {
-        shift: { employeeId, startTime: { gte: from, lte: to } }
+        shift: { employeeId, startTime: { gte: from, lte: to } },
+        type: { not: ViolationType.SHORT_SHIFT }
       }
     });
   }
@@ -316,7 +317,8 @@ export class PrismaShiftRepository implements ShiftRepository {
     const rows = await prisma.shiftViolation.groupBy({
       by: ["type"],
       where: {
-        shift: { employeeId, startTime: { gte: from, lte: to } }
+        shift: { employeeId, startTime: { gte: from, lte: to } },
+        type: { not: ViolationType.SHORT_SHIFT }
       },
       _count: { _all: true }
     });
@@ -330,12 +332,9 @@ export class PrismaShiftRepository implements ShiftRepository {
       if (row.type === ViolationType.NOT_CLOSED_IN_TIME) {
         notClosedInTime = row._count._all;
       }
-      if (row.type === ViolationType.SHORT_SHIFT) {
-        shortShift = row._count._all;
-      }
     }
 
-    return { notClosedInTime, shortShift, total };
+    return { notClosedInTime, shortShift: 0, total };
   }
 
   async groupByEmployeeStats(from: Date, to: Date): Promise<Array<{
@@ -368,6 +367,7 @@ export class PrismaShiftRepository implements ShiftRepository {
       JOIN "ShiftViolation" v ON v."shiftId" = s."id"
       WHERE s."startTime" >= ${from}
         AND s."startTime" <= ${to}
+        AND v."type" <> 'SHORT_SHIFT'
       GROUP BY s."employeeId"
     `;
 
@@ -386,6 +386,7 @@ export class PrismaShiftRepository implements ShiftRepository {
       JOIN "ShiftViolation" v ON v."shiftId" = s."id"
       WHERE s."startTime" >= ${from}
         AND s."startTime" <= ${to}
+        AND v."type" <> 'SHORT_SHIFT'
       GROUP BY s."employeeId", v."type"
     `;
 

@@ -84,7 +84,9 @@ export class ReportService {
       endTime: shift.endTime,
       durationMinutes: shift.durationMinutes,
       closedReason: shift.closedReason,
-      violations: shift.violations.map((violation) => violation.type)
+      violations: shift.violations
+        .map((violation) => violation.type)
+        .filter((type) => type !== ViolationType.SHORT_SHIFT)
     }));
 
     return {
@@ -96,7 +98,7 @@ export class ReportService {
       totalDurationMinutes: stats.totalDurationMinutes,
       averageDurationMinutes: stats.averageDurationMinutes,
       violationsNotClosedInTime: violationCounts.notClosedInTime,
-      violationsShortShift: violationCounts.shortShift,
+      violationsShortShift: 0,
       violationsTotal: violationCounts.total,
       shifts: shiftRows
     };
@@ -119,12 +121,12 @@ export class ReportService {
 
     const violationsMap = new Map<number, { notClosedInTime: number; shortShift: number; total: number }>();
     for (const row of violationsByType) {
+      if (row.type === ViolationType.SHORT_SHIFT) {
+        continue;
+      }
       const current = violationsMap.get(row.employeeId) ?? { notClosedInTime: 0, shortShift: 0, total: 0 };
       if (row.type === ViolationType.NOT_CLOSED_IN_TIME) {
         current.notClosedInTime = row.count;
-      }
-      if (row.type === ViolationType.SHORT_SHIFT) {
-        current.shortShift = row.count;
       }
       current.total += row.count;
       violationsMap.set(row.employeeId, current);
@@ -154,7 +156,7 @@ export class ReportService {
         totalDurationMinutes: row.totalDurationMinutes,
         averageDurationMinutes: row.averageDurationMinutes,
         violationsNotClosedInTime: violations.notClosedInTime,
-        violationsShortShift: violations.shortShift,
+        violationsShortShift: 0,
         violationsTotal: violations.total,
         lastShiftStart: lastShift?.startTime ?? null,
         lastShiftEnd: lastShift?.endTime ?? null,
@@ -199,7 +201,9 @@ export class ReportService {
       endTime: shift.endTime,
       durationMinutes: shift.durationMinutes,
       closedReason: shift.closedReason,
-      violations: shift.violations.map((violation) => violation.type)
+      violations: shift.violations
+        .map((violation) => violation.type)
+        .filter((type) => type !== ViolationType.SHORT_SHIFT)
     }));
   }
 
@@ -228,7 +232,9 @@ export class ReportService {
         endTime: shift.endTime,
         durationMinutes: shift.durationMinutes,
         closedReason: shift.closedReason,
-        violations: shift.violations.map((violation) => violation.type)
+        violations: shift.violations
+          .map((violation) => violation.type)
+          .filter((type) => type !== ViolationType.SHORT_SHIFT)
       }))
     };
   }

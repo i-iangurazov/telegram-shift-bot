@@ -135,7 +135,7 @@ describe("PendingActionService", () => {
     expect(db.shifts[0].photosPurgedAt).not.toBeNull();
   });
 
-  it("confirm end creates short shift violation", async () => {
+  it("confirm end does not create short shift violation", async () => {
     const { db, service } = buildService();
 
     const start = await service.createFromPhoto({
@@ -166,6 +166,6 @@ describe("PendingActionService", () => {
 
     await service.confirmAction(end.pendingAction.id, "506", new Date("2024-01-01T08:06:00Z"));
 
-    expect(db.violations.some((violation) => violation.type === ViolationType.SHORT_SHIFT)).toBe(true);
+    expect(db.violations.some((violation) => violation.type === ViolationType.SHORT_SHIFT)).toBe(false);
   });
 });

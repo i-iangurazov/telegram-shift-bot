@@ -378,7 +378,9 @@ export class InMemoryShiftRepository implements ShiftRepository {
         .filter((shift) => shift.employeeId === employeeId && shift.startTime >= from && shift.startTime <= to)
         .map((shift) => shift.id)
     );
-    return this.db.violations.filter((violation) => shiftIds.has(violation.shiftId)).length;
+    return this.db.violations.filter(
+      (violation) => shiftIds.has(violation.shiftId) && violation.type !== ViolationType.SHORT_SHIFT
+    ).length;
   }
 
   async countEmployeeViolationsByType(employeeId: number, from: Date, to: Date): Promise<{
@@ -392,23 +394,22 @@ export class InMemoryShiftRepository implements ShiftRepository {
         .map((shift) => shift.id)
     );
     let notClosedInTime = 0;
-    let shortShift = 0;
     let total = 0;
 
     for (const violation of this.db.violations) {
       if (!shiftIds.has(violation.shiftId)) {
         continue;
       }
+      if (violation.type === ViolationType.SHORT_SHIFT) {
+        continue;
+      }
       total += 1;
       if (violation.type === ViolationType.NOT_CLOSED_IN_TIME) {
         notClosedInTime += 1;
       }
-      if (violation.type === ViolationType.SHORT_SHIFT) {
-        shortShift += 1;
-      }
     }
 
-    return { notClosedInTime, shortShift, total };
+    return { notClosedInTime, shortShift: 0, total };
   }
 
   async groupByEmployeeStats(from: Date, to: Date): Promise<Array<{
@@ -438,6 +439,9 @@ export class InMemoryShiftRepository implements ShiftRepository {
   async countViolationsByEmployee(from: Date, to: Date): Promise<Array<{ employeeId: number; violations: number }>> {
     const violations = new Map<number, number>();
     for (const violation of this.db.violations) {
+      if (violation.type === ViolationType.SHORT_SHIFT) {
+        continue;
+      }
       const shift = this.db.shifts.find((item) => item.id === violation.shiftId);
       if (!shift || shift.startTime < from || shift.startTime > to) {
         continue;
@@ -456,6 +460,9 @@ export class InMemoryShiftRepository implements ShiftRepository {
   ): Promise<Array<{ employeeId: number; type: ViolationType; count: number }>> {
     const counts = new Map<string, number>();
     for (const violation of this.db.violations) {
+      if (violation.type === ViolationType.SHORT_SHIFT) {
+        continue;
+      }
       const shift = this.db.shifts.find((item) => item.id === violation.shiftId);
       if (!shift || shift.startTime < from || shift.startTime > to) {
         continue;

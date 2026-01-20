@@ -27,6 +27,6 @@ describe("ExportService", () => {
     const header = content.split("\n")[0];
     expect(header).toContain("employeeId");
     expect(header).toContain("notClosedInTimeViolationsCount");
-    expect(header).toContain("shortShiftViolationsCount");
+    expect(header).not.toContain("shortShiftViolationsCount");
   });
 });

@@ -102,8 +102,8 @@ describe("ReportService", () => {
     expect(report.totalEmployees).toBe(2);
     expect(report.totalShifts).toBe(2);
     expect(report.violationsNotClosedInTime).toBe(1);
-    expect(report.violationsShortShift).toBe(1);
-    expect(report.totalViolations).toBe(2);
+    expect(report.violationsShortShift).toBe(0);
+    expect(report.totalViolations).toBe(1);
     expect(report.topEmployees).toHaveLength(2);
   });
 });

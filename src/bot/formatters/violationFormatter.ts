@@ -1,21 +1,25 @@
 import { ViolationType } from "@prisma/client";
 
-const violationLabels: Record<ViolationType, string> = {
-  NOT_CLOSED_IN_TIME: "Не закрыл(а) смену вовремя",
-  SHORT_SHIFT: "Смена меньше 8 часов"
+const violationLabels: Partial<Record<ViolationType, string>> = {
+  NOT_CLOSED_IN_TIME: "Не закрыл(а) смену вовремя"
 };
 
+const filterVisibleViolations = (violations: ViolationType[]): ViolationType[] =>
+  violations.filter((type) => type !== ViolationType.SHORT_SHIFT);
+
 export const formatViolationsList = (violations: ViolationType[]): string => {
-  if (violations.length === 0) {
+  const visible = filterVisibleViolations(violations);
+  if (visible.length === 0) {
     return "нет";
   }
-  const list = violations.map((type) => violationLabels[type] ?? String(type)).join(", ");
+  const list = visible.map((type) => violationLabels[type] ?? String(type)).join(", ");
   return `${list} ⚠️`;
 };
 
 export const formatViolationsPresence = (violations: ViolationType[]): string => {
-  if (violations.length === 0) {
+  const visible = filterVisibleViolations(violations);
+  if (visible.length === 0) {
     return "Нарушения: нет";
   }
-  return `Нарушения: есть (${violations.length}) ⚠️`;
+  return `Нарушения: есть (${visible.length}) ⚠️`;
 };

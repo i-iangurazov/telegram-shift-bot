@@ -71,7 +71,7 @@ describe("ShiftService", () => {
     }
   });
 
-  it("creates short shift violation for short shift", async () => {
+  it("does not create short shift violation for short shift", async () => {
     const db = new InMemoryDatabase();
     const employeeRepo = new InMemoryEmployeeRepository(db);
     const shiftRepo = new InMemoryShiftRepository(db);
@@ -98,8 +98,7 @@ describe("ShiftService", () => {
       messageDate: new Date("2024-01-01T08:05:00Z")
     });
 
-    expect(db.violations).toHaveLength(1);
-    expect(db.violations[0].type).toBe(ViolationType.SHORT_SHIFT);
+    expect(db.violations).toHaveLength(0);
   });
 
   it("does not create short shift violation for 9-hour shift", async () => {

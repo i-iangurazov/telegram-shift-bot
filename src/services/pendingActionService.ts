@@ -1,4 +1,4 @@
-import { PendingActionStatus, PendingActionType, ViolationType, type Prisma } from "@prisma/client";
+import { PendingActionStatus, PendingActionType, type Prisma } from "@prisma/client";
 import { EmployeeRepository } from "../repositories/employeeRepository";
 import { ShiftRepository } from "../repositories/shiftRepository";
 import { PendingActionRepository } from "../repositories/pendingActionRepository";
@@ -147,7 +147,6 @@ export class PendingActionService {
             await this.pendingRepo.updateStatus(pending.id, PendingActionStatus.CANCELLED, now, tx);
             return { type: "open_shift_exists" };
           }
-          await this.applyShortShiftViolation(autoClosed.id, durationMinutes, tx);
         }
 
         const shift = await this.shiftRepo.createShiftStart(
@@ -176,7 +175,6 @@ export class PendingActionService {
         const durationMinutes = this.config.maxShiftHours * 60;
         const autoClosed = await this.shiftRepo.autoCloseShift(openShift.id, endTime, durationMinutes, now, tx);
         if (autoClosed) {
-          await this.applyShortShiftViolation(autoClosed.id, durationMinutes, tx);
           return { type: "auto_closed", autoClose: autoClosed };
         }
         await this.pendingRepo.updateStatus(pending.id, PendingActionStatus.CANCELLED, now, tx);
@@ -199,8 +197,6 @@ export class PendingActionService {
         },
         tx
       );
-
-      await this.applyShortShiftViolation(shift.id, durationMinutes, tx);
 
       return { type: "confirmed_end", shift, employee, durationMinutes };
     });
@@ -248,20 +244,5 @@ export class PendingActionService {
 
   async hasActivePendingAction(telegramUserId: string, now: Date = new Date()): Promise<boolean> {
     return this.pendingRepo.hasActiveForUser(telegramUserId, now);
-  }
-
-  private async applyShortShiftViolation(
-    shiftId: number,
-    durationMinutes: number | null,
-    tx?: DbClient
-  ): Promise<void> {
-    if (durationMinutes === null) {
-      return;
-    }
-
-    const threshold = this.config.minShiftMinutes - this.config.shortShiftGraceMinutes;
-    if (durationMinutes < threshold) {
-      await this.shiftRepo.createViolation(shiftId, ViolationType.SHORT_SHIFT, tx);
-    }
   }
 }
