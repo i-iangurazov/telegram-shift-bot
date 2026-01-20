@@ -2,10 +2,14 @@ const nameTokenPattern = /^[\p{Script=Latin}\p{Script=Cyrillic}]+(?:-[\p{Script=
 
 const isBlank = (value?: string | null): boolean => !value || value.trim().length === 0;
 const hasFullName = (value?: string | null): boolean => {
-  if (isBlank(value)) {
+  if (!value) {
     return false;
   }
-  const tokens = value.trim().split(/\s+/);
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return false;
+  }
+  const tokens = trimmed.split(/\s+/);
   if (tokens.length < 2) {
     return false;
   }
