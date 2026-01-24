@@ -9,19 +9,7 @@ import { UserSessionRepository } from "../repositories/userSessionRepository";
 import { ExportService } from "../services/exportService";
 import { PendingActionService } from "../services/pendingActionService";
 import { PhotoReviewService } from "../services/photoReviewService";
-import { registerStartCommand } from "./handlers/startCommand";
-import { registerStatusCommand } from "./handlers/statusCommand";
-import { registerAdminEmployeesFlow } from "./handlers/adminEmployeesFlow";
-import { registerAdminReportFlow } from "./handlers/adminReportFlow";
-import { registerAdminErrorsCommand } from "./handlers/adminErrorsCommand";
-import { registerPhotoHandler } from "./handlers/photoHandler";
-import { registerPendingActionHandlers } from "./handlers/pendingActionHandlers";
-import { registerTextHandler } from "./handlers/textHandler";
-import { registerWhoamiCommand } from "./handlers/whoamiCommand";
-import { registerSetAdminCommand } from "./handlers/setAdminCommand";
-import { registerHelpCommand } from "./handlers/helpCommand";
-import { registerModeCommand } from "./handlers/modeCommand";
-import { registerFullNameCommand } from "./handlers/fullNameCommand";
+import { registerCommands } from "./registerCommands";
 import { prisma } from "../db/prisma";
 import { logEvent } from "../server/logging/eventLog";
 
@@ -38,26 +26,7 @@ export const createBot = (deps: {
 }): Telegraf => {
   const bot = new Telegraf(env.telegramBotToken);
 
-  registerStartCommand(bot, deps.roleService, deps.employeeRepo, deps.userSessionRepo);
-  registerStatusCommand(bot, deps.shiftService, deps.roleService);
-  registerWhoamiCommand(bot);
-  registerHelpCommand(bot, deps.roleService);
-  registerModeCommand(bot, deps.roleService);
-  registerFullNameCommand(bot, deps.roleService, deps.employeeRepo, deps.userSessionRepo);
-  registerSetAdminCommand(bot, deps.adminService);
-  registerAdminEmployeesFlow(
-    bot,
-    deps.adminService,
-    deps.employeeRepo,
-    deps.reportService,
-    deps.exportService,
-    deps.photoReviewService
-  );
-  registerAdminReportFlow(bot, deps.adminService, deps.reportService, deps.exportService);
-  registerAdminErrorsCommand(bot, deps.adminService);
-  registerPhotoHandler(bot, deps.roleService, deps.pendingActionService);
-  registerPendingActionHandlers(bot, deps.pendingActionService, deps.adminService);
-  registerTextHandler(bot, deps.roleService, deps.employeeRepo, deps.userSessionRepo, deps.pendingActionService);
+  registerCommands(bot, deps);
 
   bot.catch(async (error, ctx) => {
     console.error(
