@@ -1,0 +1,58 @@
+name: test
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: shift_bot_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      TELEGRAM_BOT_TOKEN: test-token
+      TELEGRAM_BOSS_CHAT_ID: 999999
+      ADMIN_USER_IDS: ""
+      WEBHOOK_SECRET: test-secret
+      INTERNAL_SECRET: test-internal
+      PUBLIC_BASE_URL: http://localhost:3000
+      TELEGRAM_WEBHOOK_SECRET_TOKEN: testhdr
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shift_bot_test?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/shift_bot_test?schema=public
+      TIMEZONE: Asia/Bishkek
+      NOTIFY_EMPLOYEE_ON_AUTOCLOSE: "false"
+      LOG_LEVEL: error
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+      - name: Apply migrations
+        run: pnpm prisma migrate deploy
+      - name: Run tests
+        run: pnpm test
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck

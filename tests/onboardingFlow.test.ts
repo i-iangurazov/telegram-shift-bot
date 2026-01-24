@@ -98,7 +98,7 @@ describe("Employee onboarding", () => {
 
     await sendTextUpdate(bot, { userId: 100, text: "/start", firstName: "Ильяс" });
 
-    expect(replies).toEqual([messages.namePrompt]);
+    expect(replies).toEqual(["✅ DEBUG: /start reached", messages.namePrompt]);
     const session = await sessionRepo.getSession("100");
     expect(session?.nameRequestedAt).not.toBeNull();
   });
@@ -130,7 +130,7 @@ describe("Employee onboarding", () => {
 
     await sendTextUpdate(bot, { userId: 102, text: "/start", firstName: "Ильяс" });
 
-    expect(replies).toEqual([messages.startEmployee]);
+    expect(replies).toEqual(["✅ DEBUG: /start reached", messages.startEmployee]);
   });
 
   it("does not prompt admins", async () => {
@@ -139,7 +139,7 @@ describe("Employee onboarding", () => {
 
     await sendTextUpdate(bot, { userId: 200, text: "/start", firstName: "Админ", lastName: "Тест" });
 
-    expect(replies).toEqual([messages.startAdmin]);
+    expect(replies).toEqual(["✅ DEBUG: /start reached", messages.startAdmin]);
   });
 });
 

@@ -125,3 +125,18 @@ pnpm ts-node scripts/deleteWebhook.ts
 ```bash
 pnpm test
 ```
+
+### Локальный запуск тестов
+1. Поднимите тестовый PostgreSQL (например, через Docker):
+   ```bash
+   docker run --rm -p 5432:5432 -e POSTGRES_DB=shift_bot_test -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres postgres:15-alpine
+   ```
+2. Скопируйте `.env.test.example` в `.env.test` и при необходимости измените `DATABASE_URL`.
+3. Примените миграции:
+   ```bash
+   pnpm prisma migrate deploy
+   ```
+4. Запустите тесты:
+   ```bash
+   pnpm test
+   ```

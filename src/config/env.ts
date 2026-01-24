@@ -5,6 +5,19 @@ if (process.env.NODE_ENV !== "production") {
   dotenv.config();
 }
 
+const boolFromEnv = z.preprocess((value) => {
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "y", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["false", "0", "no", "n", "off", ""].includes(normalized)) {
+      return false;
+    }
+  }
+  return value;
+}, z.boolean());
+
 const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1),
   TELEGRAM_BOSS_CHAT_ID: z.string().min(1),
@@ -25,8 +38,8 @@ const envSchema = z.object({
   OVERDUE_CHECK_CRON: z.string().default("*/5 * * * *"),
   TICK_MAX_AUTOCLOSE: z.coerce.number().int().positive().default(50),
   TICK_MAX_EXPIRE_PENDING: z.coerce.number().int().positive().default(200),
-  NOTIFY_EMPLOYEE_ON_AUTOCLOSE: z.coerce.boolean().default(true),
-  ERROR_NOTIFY_BOSS: z.coerce.boolean().default(false),
+  NOTIFY_EMPLOYEE_ON_AUTOCLOSE: boolFromEnv.default(true),
+  ERROR_NOTIFY_BOSS: boolFromEnv.default(false),
   ERROR_NOTIFY_COOLDOWN_SEC: z.coerce.number().int().positive().default(60),
   EVENT_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(14),
   LOG_LEVEL: z.string().default("info"),

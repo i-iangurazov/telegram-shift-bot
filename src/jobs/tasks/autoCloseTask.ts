@@ -5,6 +5,7 @@ import { env } from "../../config/env";
 import { messages } from "../../bot/messages";
 import { formatTime } from "../../utils/time";
 import { safeSendMessage } from "../../bot/utils/safeSendMessage";
+import { Clock, systemClock } from "../../server/clock";
 
 export interface AutoCloseSummary {
   autoClosed: number;
@@ -16,9 +17,9 @@ export const runAutoCloseOnce = async (
   bot: Telegraf,
   shiftService: ShiftService,
   adminService: AdminService,
-  options?: { now?: Date; limit?: number }
+  options?: { now?: Date; limit?: number; clock?: Clock }
 ): Promise<AutoCloseSummary> => {
-  const now = options?.now ?? new Date();
+  const now = options?.now ?? options?.clock?.now() ?? systemClock.now();
   const results = await shiftService.autoCloseOverdueShifts(now, options?.limit);
   if (results.length === 0) {
     return { autoClosed: 0, notifiedAdmins: 0, notifiedEmployees: 0 };

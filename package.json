@@ -14,6 +14,8 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "jest",
+    "test:watch": "jest --watch",
+    "test:db": "jest tests/db",
     "postinstall": "prisma generate",
     "vercel-build": "prisma generate && prisma migrate deploy && next build"
   },

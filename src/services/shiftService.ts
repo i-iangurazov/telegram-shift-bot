@@ -2,6 +2,7 @@ import { ShiftRepository } from "../repositories/shiftRepository";
 import { EmployeeRepository } from "../repositories/employeeRepository";
 import { EmployeeRecord, ShiftRecord, ShiftWithRelations, TelegramUserInput } from "../domain/types";
 import { Logger } from "../utils/logger";
+import { Clock, systemClock } from "../server/clock";
 
 export type ShiftActionResult =
   | { type: "duplicate" }
@@ -27,12 +28,17 @@ export interface ShiftServiceConfig {
 }
 
 export class ShiftService {
+  private clock: Clock;
+
   constructor(
     private employeeRepo: EmployeeRepository,
     private shiftRepo: ShiftRepository,
     private config: ShiftServiceConfig,
-    private logger: Logger
-  ) {}
+    private logger: Logger,
+    clock: Clock = systemClock
+  ) {
+    this.clock = clock;
+  }
 
   async handlePhotoMessage(params: {
     user: TelegramUserInput;
@@ -109,7 +115,7 @@ export class ShiftService {
     return this.shiftRepo.findOpenShift(employee.id);
   }
 
-  async autoCloseOverdueShifts(now: Date = new Date(), limit?: number): Promise<AutoCloseResult[]> {
+  async autoCloseOverdueShifts(now: Date = this.clock.now(), limit?: number): Promise<AutoCloseResult[]> {
     const maxShiftMs = this.config.maxShiftHours * 60 * 60 * 1000;
     const cutoff = new Date(now.getTime() - maxShiftMs);
     const overdueShifts = await this.shiftRepo.findOverdueShifts(cutoff, limit);

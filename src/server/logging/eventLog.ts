@@ -215,6 +215,9 @@ const buildBossMessage = (input: LogEventInput, error: ErrorDetails): string => 
 };
 
 const sendBossNotification = async (text: string): Promise<void> => {
+  if (process.env.NODE_ENV === "test") {
+    return;
+  }
   if (!env.errorNotifyBoss) {
     return;
   }
@@ -280,24 +283,32 @@ export const logEvent = async (prisma: PrismaLike, input: LogEventInput): Promis
       });
     }
 
-    await prisma.eventLog.create({
-      data: {
-        level: input.level,
-        kind: input.kind,
-        updateId: input.updateId ?? undefined,
-        chatId: toIdString(input.chatId),
-        fromId: toIdString(input.fromId),
-        messageId: input.messageId ?? undefined,
-        updateType: updateType ?? undefined,
-        meta: meta ?? undefined,
-        errorName: errorDetails.name,
-        errorMsg,
-        errorStack,
-        fingerprint
+    try {
+      await prisma.eventLog.create({
+        data: {
+          level: input.level,
+          kind: input.kind,
+          updateId: input.updateId ?? undefined,
+          chatId: toIdString(input.chatId),
+          fromId: toIdString(input.fromId),
+          messageId: input.messageId ?? undefined,
+          updateType: updateType ?? undefined,
+          meta: meta ?? undefined,
+          errorName: errorDetails.name,
+          errorMsg,
+          errorStack,
+          fingerprint
+        }
+      });
+    } catch (error) {
+      const code = typeof error === "object" && error ? (error as { code?: string }).code : undefined;
+      if (code === "P2002") {
+        return;
       }
-    });
+      throw error;
+    }
 
-    if (input.level === "error" && env.errorNotifyBoss) {
+    if (input.level === "error" && env.errorNotifyBoss && env.nodeEnv !== "test") {
       const now = Date.now();
       const lastSent = notifyState[input.kind] ?? 0;
       const cooldownMs = env.errorNotifyCooldownSec * 1000;

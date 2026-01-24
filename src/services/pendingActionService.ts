@@ -3,6 +3,7 @@ import { EmployeeRepository } from "../repositories/employeeRepository";
 import { ShiftRepository } from "../repositories/shiftRepository";
 import { PendingActionRepository } from "../repositories/pendingActionRepository";
 import { EmployeeRecord, PendingActionRecord, ShiftRecord, ShiftWithRelations } from "../domain/types";
+import { Clock, systemClock } from "../server/clock";
 
 type DbClient = Prisma.TransactionClient;
 type TransactionRunner = <T>(fn: (tx?: DbClient) => Promise<T>) => Promise<T>;
@@ -37,13 +38,18 @@ export type PendingActionCancelResult =
   | { type: "already_handled"; status: PendingActionStatus };
 
 export class PendingActionService {
+  private clock: Clock;
+
   constructor(
     private employeeRepo: EmployeeRepository,
     private shiftRepo: ShiftRepository,
     private pendingRepo: PendingActionRepository,
     private config: PendingActionConfig,
-    private runInTransaction: TransactionRunner
-  ) {}
+    private runInTransaction: TransactionRunner,
+    clock: Clock = systemClock
+  ) {
+    this.clock = clock;
+  }
 
   async createFromPhoto(params: {
     user: { id: number; username?: string; firstName?: string; lastName?: string; chatId: number };
@@ -89,7 +95,7 @@ export class PendingActionService {
     return { type: "pending", pendingAction, actionType, employee };
   }
 
-  async confirmAction(id: number, userId: string, now: Date = new Date()): Promise<PendingActionConfirmResult> {
+  async confirmAction(id: number, userId: string, now: Date = this.clock.now()): Promise<PendingActionConfirmResult> {
     return this.runInTransaction(async (tx) => {
       const pending = await this.pendingRepo.findById(id, tx);
       if (!pending) {
@@ -202,7 +208,7 @@ export class PendingActionService {
     });
   }
 
-  async cancelAction(id: number, userId: string, now: Date = new Date()): Promise<PendingActionCancelResult> {
+  async cancelAction(id: number, userId: string, now: Date = this.clock.now()): Promise<PendingActionCancelResult> {
     return this.runInTransaction(async (tx) => {
       const pending = await this.pendingRepo.findById(id, tx);
       if (!pending) {
@@ -238,11 +244,11 @@ export class PendingActionService {
     });
   }
 
-  async expirePendingActions(now: Date = new Date(), limit?: number): Promise<number> {
+  async expirePendingActions(now: Date = this.clock.now(), limit?: number): Promise<number> {
     return this.pendingRepo.expirePendingActions(now, limit);
   }
 
-  async hasActivePendingAction(telegramUserId: string, now: Date = new Date()): Promise<boolean> {
+  async hasActivePendingAction(telegramUserId: string, now: Date = this.clock.now()): Promise<boolean> {
     return this.pendingRepo.hasActiveForUser(telegramUserId, now);
   }
 }
