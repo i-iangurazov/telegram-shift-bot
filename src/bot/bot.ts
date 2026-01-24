@@ -13,6 +13,7 @@ import { registerStartCommand } from "./handlers/startCommand";
 import { registerStatusCommand } from "./handlers/statusCommand";
 import { registerAdminEmployeesFlow } from "./handlers/adminEmployeesFlow";
 import { registerAdminReportFlow } from "./handlers/adminReportFlow";
+import { registerAdminErrorsCommand } from "./handlers/adminErrorsCommand";
 import { registerPhotoHandler } from "./handlers/photoHandler";
 import { registerPendingActionHandlers } from "./handlers/pendingActionHandlers";
 import { registerTextHandler } from "./handlers/textHandler";
@@ -21,6 +22,8 @@ import { registerSetAdminCommand } from "./handlers/setAdminCommand";
 import { registerHelpCommand } from "./handlers/helpCommand";
 import { registerModeCommand } from "./handlers/modeCommand";
 import { registerFullNameCommand } from "./handlers/fullNameCommand";
+import { prisma } from "../db/prisma";
+import { logEvent } from "../server/logging/eventLog";
 
 export const createBot = (deps: {
   shiftService: ShiftService;
@@ -51,9 +54,40 @@ export const createBot = (deps: {
     deps.photoReviewService
   );
   registerAdminReportFlow(bot, deps.adminService, deps.reportService, deps.exportService);
+  registerAdminErrorsCommand(bot, deps.adminService);
   registerPhotoHandler(bot, deps.roleService, deps.pendingActionService);
   registerPendingActionHandlers(bot, deps.pendingActionService, deps.adminService);
   registerTextHandler(bot, deps.roleService, deps.employeeRepo, deps.userSessionRepo, deps.pendingActionService);
+
+  bot.catch(async (error, ctx) => {
+    try {
+      const message = (ctx.message as any) ?? (ctx.update as any)?.message;
+      const callbackQuery = (ctx.callbackQuery as any) ?? (ctx.update as any)?.callback_query;
+      const update = ctx.update as any;
+      const callbackData = callbackQuery?.data;
+
+      await logEvent(prisma, {
+        level: "error",
+        kind: "telegraf_error",
+        updateId: typeof update?.update_id === "number" ? update.update_id : undefined,
+        updateType: ctx.updateType,
+        chatId: ctx.chat?.id,
+        fromId: ctx.from?.id,
+        messageId: message?.message_id ?? callbackQuery?.message?.message_id,
+        meta: {
+          hasPhoto: Boolean(message?.photo?.length),
+          hasText: Boolean(message?.text),
+          hasCaption: Boolean(message?.caption),
+          mediaGroupId: message?.media_group_id ? String(message.media_group_id) : undefined,
+          callbackDataPrefix: typeof callbackData === "string" ? callbackData.slice(0, 20) : undefined
+        },
+        err: error
+      });
+    } catch (logError) {
+      // avoid recursive failures in error handler
+      console.error("Failed to log telegraf error", logError);
+    }
+  });
 
   return bot;
 };

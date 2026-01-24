@@ -2,7 +2,7 @@ import { Markup } from "telegraf";
 
 export const adminKeyboard = Markup.keyboard([
   ["Сотрудники", "Отчёт"],
-  ["Помощь"]
+  ["Ошибки", "Помощь"]
 ]).resize();
 
 export const employeeKeyboard = Markup.keyboard([

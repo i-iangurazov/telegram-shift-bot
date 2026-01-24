@@ -4,7 +4,7 @@ import { AdminService } from "../../services/adminService";
 import { env } from "../../config/env";
 import { messages } from "../../bot/messages";
 import { formatTime } from "../../utils/time";
-import { logger } from "../../config/logger";
+import { safeSendMessage } from "../../bot/utils/safeSendMessage";
 
 export interface AutoCloseSummary {
   autoClosed: number;
@@ -34,23 +34,20 @@ export const runAutoCloseOnce = async (
 
     const bossMessage = messages.autoClosedBoss(employeeName, endTime, env.maxShiftHours);
     for (const adminChatId of adminChatIds) {
-      try {
-        await bot.telegram.sendMessage(adminChatId, bossMessage);
+      const result = await safeSendMessage(bot.telegram, adminChatId, bossMessage);
+      if (result) {
         notifiedAdmins += 1;
-      } catch (error) {
-        logger.error({ err: error, adminChatId }, "Failed to notify admin about auto-close");
       }
     }
 
     if (env.notifyEmployeeOnAutoClose) {
-      try {
-        await bot.telegram.sendMessage(
-          result.shift.employee.telegramUserId,
-          messages.autoClosedEmployee(env.maxShiftHours)
-        );
+      const resultMessage = await safeSendMessage(
+        bot.telegram,
+        result.shift.employee.telegramUserId,
+        messages.autoClosedEmployee(env.maxShiftHours)
+      );
+      if (resultMessage) {
         notifiedEmployees += 1;
-      } catch (error) {
-        logger.error({ err: error, employeeId: result.shift.employee.telegramUserId }, "Failed to notify employee");
       }
     }
   }

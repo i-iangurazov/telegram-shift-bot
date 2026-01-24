@@ -95,6 +95,46 @@ model UserSession {
   updatedAt      DateTime @updatedAt
 }
 
+model EventLog {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+
+  level      String
+  kind       String
+
+  updateId   Int?
+  chatId     String?
+  fromId     String?
+  messageId  Int?
+
+  updateType String?
+  meta       Json?
+
+  errorName  String?
+  errorMsg   String?
+  errorStack String?
+
+  fingerprint String? @unique
+
+  @@index([createdAt])
+  @@index([kind, createdAt])
+  @@index([fromId, createdAt])
+  @@index([chatId, createdAt])
+}
+
+model TelegramUpdateQueue {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updateId  Int      @unique
+  payload   Json
+  status    String   @default("pending")
+  attempts  Int      @default(0)
+  lastError String?
+  nextRunAt DateTime @default(now())
+
+  @@index([status, nextRunAt, createdAt])
+}
+
 enum ClosedReason {
   USER_PHOTO
   AUTO_TIMEOUT

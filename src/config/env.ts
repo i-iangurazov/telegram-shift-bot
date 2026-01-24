@@ -26,6 +26,9 @@ const envSchema = z.object({
   TICK_MAX_AUTOCLOSE: z.coerce.number().int().positive().default(50),
   TICK_MAX_EXPIRE_PENDING: z.coerce.number().int().positive().default(200),
   NOTIFY_EMPLOYEE_ON_AUTOCLOSE: z.coerce.boolean().default(true),
+  ERROR_NOTIFY_BOSS: z.coerce.boolean().default(false),
+  ERROR_NOTIFY_COOLDOWN_SEC: z.coerce.number().int().positive().default(60),
+  EVENT_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(14),
   LOG_LEVEL: z.string().default("info"),
   NODE_ENV: z.string().optional()
 });
@@ -61,6 +64,9 @@ export const env = {
   tickMaxAutoclose: parsed.data.TICK_MAX_AUTOCLOSE,
   tickMaxExpirePending: parsed.data.TICK_MAX_EXPIRE_PENDING,
   notifyEmployeeOnAutoClose: parsed.data.NOTIFY_EMPLOYEE_ON_AUTOCLOSE,
+  errorNotifyBoss: parsed.data.ERROR_NOTIFY_BOSS,
+  errorNotifyCooldownSec: parsed.data.ERROR_NOTIFY_COOLDOWN_SEC,
+  eventLogRetentionDays: parsed.data.EVENT_LOG_RETENTION_DAYS,
   logLevel: parsed.data.LOG_LEVEL,
   nodeEnv: parsed.data.NODE_ENV
 };

@@ -74,6 +74,7 @@ docker compose up -d --build
 - `/employees` или кнопка «Сотрудники» — отчет для руководителя.
 - В разделе «Сотрудники» доступен просмотр фото смен за сегодня/вчера/последние 3 дня.
 - `/report` или кнопка «Отчёт» — общий отчёт по всем сотрудникам.
+- `/errors` — ошибки (администратор).
 - `/whoami` — вывод chat/user ID для настройки.
 - `/set_admin` — назначить себя администратором (если админов еще нет или вы уже админ).
 - `/mode` — переключить режим (доступно, если включен режим BOTH).
@@ -90,8 +91,9 @@ docker compose up -d --build
 
 ## Вебхуки и тикер
 - Вебхук: `POST /api/telegram/webhook/<WEBHOOK_SECRET>`.
-- Internal tick: `POST /api/internal/tick` (обычный) или `POST /api/internal/tick?mode=daily`.
+- Internal tick: `POST /api/internal/tick` (обычный), `POST /api/internal/tick?mode=queue` или `POST /api/internal/tick?mode=daily`.
 - Авторизация internal tick: `Authorization: Bearer <INTERNAL_SECRET>` или заголовок `x-internal-secret`.
+- Вебхук только ставит обновления в очередь, обработка идёт через tick-queue.
 
 ### GitHub Actions
 Добавьте секреты в GitHub:
@@ -100,6 +102,7 @@ docker compose up -d --build
 
 Файлы воркфлоу:
 - `.github/workflows/tick-regular.yml` — каждые 30 минут.
+- `.github/workflows/tick-queue.yml` — каждые 5 минут (обработка очереди обновлений).
 - `.github/workflows/tick-daily.yml` — каждый день в 03:05.
 
 ## Скрипты вебхука

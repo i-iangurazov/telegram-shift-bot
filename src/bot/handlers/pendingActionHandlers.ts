@@ -6,6 +6,7 @@ import { messages } from "../messages";
 import { formatDurationMinutes } from "../../utils/format";
 import { formatTime } from "../../utils/time";
 import { logger } from "../../config/logger";
+import { safeSendMessage } from "../utils/safeSendMessage";
 
 const parsePendingId = (data: string): number => {
   const parts = data.split(":");
@@ -38,22 +39,15 @@ export const registerPendingActionHandlers = (
           const bossAutoMessage = messages.autoClosedBoss(result.employee.displayName, endTime, env.maxShiftHours);
 
           for (const adminChatId of adminChatIds) {
-            try {
-              await bot.telegram.sendMessage(adminChatId, bossAutoMessage);
-            } catch (error) {
-              logger.error({ err: error, adminChatId }, "Failed to notify admin about auto-close");
-            }
+            await safeSendMessage(bot.telegram, adminChatId, bossAutoMessage);
           }
 
           if (env.notifyEmployeeOnAutoClose) {
-            try {
-              await bot.telegram.sendMessage(
-                result.employee.telegramUserId,
-                messages.autoClosedEmployee(env.maxShiftHours)
-              );
-            } catch (error) {
-              logger.error({ err: error, employeeId: result.employee.telegramUserId }, "Failed to notify employee");
-            }
+            await safeSendMessage(
+              bot.telegram,
+              result.employee.telegramUserId,
+              messages.autoClosedEmployee(env.maxShiftHours)
+            );
           }
         }
 
@@ -62,11 +56,7 @@ export const registerPendingActionHandlers = (
 
         const bossMessage = messages.bossShiftStarted(result.employee.displayName, time);
         for (const adminChatId of adminChatIds) {
-          try {
-            await bot.telegram.sendMessage(adminChatId, bossMessage);
-          } catch (error) {
-            logger.error({ err: error, adminChatId }, "Failed to notify admin about shift start");
-          }
+          await safeSendMessage(bot.telegram, adminChatId, bossMessage);
         }
 
         return;
@@ -79,11 +69,7 @@ export const registerPendingActionHandlers = (
 
         const bossMessage = messages.bossShiftClosed(result.employee.displayName, duration);
         for (const adminChatId of adminChatIds) {
-          try {
-            await bot.telegram.sendMessage(adminChatId, bossMessage);
-          } catch (error) {
-            logger.error({ err: error, adminChatId }, "Failed to notify admin about shift close");
-          }
+          await safeSendMessage(bot.telegram, adminChatId, bossMessage);
         }
 
         return;
@@ -98,11 +84,7 @@ export const registerPendingActionHandlers = (
         );
 
         for (const adminChatId of adminChatIds) {
-          try {
-            await bot.telegram.sendMessage(adminChatId, bossMessage);
-          } catch (error) {
-            logger.error({ err: error, adminChatId }, "Failed to notify admin about auto-close");
-          }
+          await safeSendMessage(bot.telegram, adminChatId, bossMessage);
         }
 
         if (env.notifyEmployeeOnAutoClose) {
