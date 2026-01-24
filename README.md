@@ -50,6 +50,7 @@ docker compose up -d --build
 - `TELEGRAM_BOSS_CHAT_ID` — chat_id руководителя.
 - `ADMIN_USER_IDS` — список user_id администраторов через запятую.
 - `DATABASE_URL` — строка подключения к PostgreSQL.
+- `DIRECT_URL` — прямое подключение к PostgreSQL без pooler (нужно для миграций).
 - `WEBHOOK_SECRET` — секрет для URL вебхука.
 - `INTERNAL_SECRET` — секрет для internal tick endpoint.
 - `PUBLIC_BASE_URL` — публичный URL Vercel (например `https://project.vercel.app`).
