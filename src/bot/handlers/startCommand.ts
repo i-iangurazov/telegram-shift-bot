@@ -13,6 +13,7 @@ export const registerStartCommand = (
   userSessionRepo: UserSessionRepository
 ): void => {
   bot.start(async (ctx) => {
+    await ctx.reply("✅ DEBUG: /start reached");
     const from = ctx.from;
     if (!from) {
       return;

@@ -60,6 +60,16 @@ export const createBot = (deps: {
   registerTextHandler(bot, deps.roleService, deps.employeeRepo, deps.userSessionRepo, deps.pendingActionService);
 
   bot.catch(async (error, ctx) => {
+    console.error(
+      "telegraf_error",
+      {
+        update_id: ctx.update?.update_id,
+        updateType: ctx.updateType,
+        chatId: ctx.chat?.id,
+        fromId: ctx.from?.id
+      },
+      error
+    );
     try {
       const message = (ctx.message as any) ?? (ctx.update as any)?.message;
       const callbackQuery = (ctx.callbackQuery as any) ?? (ctx.update as any)?.callback_query;
