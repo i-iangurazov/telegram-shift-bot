@@ -97,7 +97,7 @@ export async function POST(
 
   const contentType = req.headers.get("content-type");
   let rawBody = "";
-  let update: Record<string, any>;
+  let update: any;
 
   try {
     rawBody = await req.text();
