@@ -10,7 +10,7 @@ import { messages } from "../messages";
 import {
   buildEmployeeListKeyboard,
   buildEmployeePeriodKeyboard,
-  buildEmployeeExportKeyboard,
+  buildEmployeeReportPaginationKeyboard,
   buildEmployeeActionKeyboard,
   buildPhotoPeriodKeyboard,
   buildPhotoShiftListKeyboard
@@ -18,7 +18,6 @@ import {
 import { buildEmployeeReportMessage } from "../formatters/adminReportFormatter";
 import { formatViolationsList, formatViolationsPresence } from "../formatters/violationFormatter";
 import { env } from "../../config/env";
-import { splitMessage } from "../formatters/reportFormatter";
 import { adminKeyboard } from "../keyboards/roleKeyboards";
 import { logger } from "../../config/logger";
 import { formatDurationMinutes } from "../../utils/format";
@@ -266,21 +265,64 @@ export const registerAdminEmployeesFlow = (
     }
 
     try {
-      const report = await reportService.getEmployeeReport(employeeId, days);
+      const report = await reportService.getEmployeeReport(employeeId, days, { page: 0, pageSize: 10 });
       if (!report) {
         await ctx.reply(messages.noEmployeesFound);
         return;
       }
 
       const message = buildEmployeeReportMessage(report, env.timezone);
-      const chunks = splitMessage(message);
-      for (const chunk of chunks) {
-        await ctx.reply(chunk);
-      }
-
-      await ctx.reply("Экспорт:", buildEmployeeExportKeyboard(employeeId, days));
+      const keyboard = buildEmployeeReportPaginationKeyboard({
+        employeeId,
+        days,
+        page: report.page,
+        pageSize: report.pageSize,
+        totalShifts: report.totalShifts
+      });
+      await ctx.reply(message, keyboard);
     } catch (error) {
       logger.error({ err: error }, "Failed to build employee report");
+      await ctx.reply("Не удалось сформировать отчёт. Попробуйте позже.");
+    }
+  });
+
+  bot.action(/^emp_rep:/, guard, async (ctx) => {
+    await ctx.answerCbQuery();
+    const data = "data" in ctx.callbackQuery ? ctx.callbackQuery.data : "";
+    const parts = data.split(":");
+    const employeeId = Number(parts[1] ?? "0");
+    const days = Number(parts[2] ?? "0");
+    const page = Number(parts[3] ?? "0");
+
+    if (!employeeId || !days || !Number.isFinite(page)) {
+      await ctx.reply("Данные устарели. Сформируйте отчёт заново.");
+      return;
+    }
+
+    try {
+      const report = await reportService.getEmployeeReport(employeeId, days, { page, pageSize: 10 });
+      if (!report) {
+        await ctx.reply("Данные устарели. Сформируйте отчёт заново.");
+        return;
+      }
+
+      const message = buildEmployeeReportMessage(report, env.timezone);
+      const keyboard = buildEmployeeReportPaginationKeyboard({
+        employeeId,
+        days,
+        page: report.page,
+        pageSize: report.pageSize,
+        totalShifts: report.totalShifts
+      });
+
+      try {
+        await ctx.editMessageText(message, keyboard);
+      } catch (editError) {
+        logger.warn({ err: editError }, "Failed to edit employee report message");
+        await ctx.reply("Данные устарели. Сформируйте отчёт заново.");
+      }
+    } catch (error) {
+      logger.error({ err: error }, "Failed to paginate employee report");
       await ctx.reply("Не удалось сформировать отчёт. Попробуйте позже.");
     }
   });
@@ -412,6 +454,34 @@ export const registerAdminEmployeesFlow = (
     const employeeId = Number(parts[3] ?? "0");
 
     if (format !== "csv" || !days || !employeeId) {
+      return;
+    }
+
+    try {
+      const report = await reportService.getEmployeeReport(employeeId, days);
+      if (!report) {
+        await ctx.reply(messages.noEmployeesFound);
+        return;
+      }
+      const shifts = await reportService.getEmployeeShiftsForExport(employeeId, days);
+      const reportForExport = { ...report, shifts };
+      const file = exportService.buildEmployeeReportCsv(reportForExport, env.timezone);
+      await ctx.replyWithDocument({ source: file.content, filename: file.filename });
+    } catch (error) {
+      logger.error({ err: error }, "Failed to export employee report");
+      await ctx.reply("Не удалось сформировать файл. Попробуйте позже.");
+    }
+  });
+
+  bot.action(/^emp_rep_export:/, guard, async (ctx) => {
+    await ctx.answerCbQuery();
+    const data = "data" in ctx.callbackQuery ? ctx.callbackQuery.data : "";
+    const parts = data.split(":");
+    const employeeId = Number(parts[1] ?? "0");
+    const days = Number(parts[2] ?? "0");
+
+    if (!employeeId || !days) {
+      await ctx.reply("Данные устарели. Сформируйте отчёт заново.");
       return;
     }
 

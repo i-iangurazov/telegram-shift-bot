@@ -365,11 +365,17 @@ export class InMemoryShiftRepository implements ShiftRepository {
     return limited.map((shift) => this.attachRelations(shift));
   }
 
-  async findEmployeeShiftsInRange(employeeId: number, from: Date, to: Date, limit: number): Promise<ShiftWithRelations[]> {
+  async findEmployeeShiftsInRange(
+    employeeId: number,
+    from: Date,
+    to: Date,
+    options: { limit: number; skip?: number }
+  ): Promise<ShiftWithRelations[]> {
+    const skip = options.skip ?? 0;
     return this.db.shifts
       .filter((shift) => shift.employeeId === employeeId && shift.startTime >= from && shift.startTime <= to)
       .sort((a, b) => b.startTime.getTime() - a.startTime.getTime())
-      .slice(0, limit)
+      .slice(skip, skip + options.limit)
       .map((shift) => this.attachRelations(shift));
   }
 

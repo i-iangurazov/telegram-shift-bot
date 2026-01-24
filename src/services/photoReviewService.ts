@@ -59,7 +59,7 @@ export class PhotoReviewService {
   }
 
   async listEmployeeShifts(employeeId: number, range: PhotoRange, limit: number): Promise<PhotoShiftSummary[]> {
-    const shifts = await this.shiftRepo.findEmployeeShiftsInRange(employeeId, range.from, range.to, limit);
+    const shifts = await this.shiftRepo.findEmployeeShiftsInRange(employeeId, range.from, range.to, { limit });
     return shifts.map((shift) => ({
       id: shift.id,
       startTime: shift.startTime,

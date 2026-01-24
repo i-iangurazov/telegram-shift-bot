@@ -98,8 +98,31 @@ export const buildAllPeriodKeyboard = (): ReturnType<typeof Markup.inlineKeyboar
 
 export const buildEmployeeExportKeyboard = (employeeId: number, days: number): ReturnType<typeof Markup.inlineKeyboard> => {
   return Markup.inlineKeyboard([
-    [Markup.button.callback("Экспорт CSV", `export_emp:csv:${days}:${employeeId}`)]
+    [Markup.button.callback("Экспорт CSV", `emp_rep_export:${employeeId}:${days}`)]
   ]);
+};
+
+export const buildEmployeeReportPaginationKeyboard = (params: {
+  employeeId: number;
+  days: number;
+  page: number;
+  pageSize: number;
+  totalShifts: number;
+}): ReturnType<typeof Markup.inlineKeyboard> => {
+  const buttons = [];
+  const hasPages = params.totalShifts > params.pageSize;
+  const hasPrev = hasPages && params.page > 0;
+  const hasNext = hasPages && (params.page + 1) * params.pageSize < params.totalShifts;
+
+  if (hasPrev) {
+    buttons.push(Markup.button.callback("⬅️ Назад", `emp_rep:${params.employeeId}:${params.days}:${params.page - 1}`));
+  }
+  if (hasNext) {
+    buttons.push(Markup.button.callback("➡️ Далее", `emp_rep:${params.employeeId}:${params.days}:${params.page + 1}`));
+  }
+  buttons.push(Markup.button.callback("📄 Экспорт", `emp_rep_export:${params.employeeId}:${params.days}`));
+
+  return Markup.inlineKeyboard([buttons]);
 };
 
 export const buildAllExportKeyboard = (days: number): ReturnType<typeof Markup.inlineKeyboard> => {

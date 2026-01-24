@@ -28,6 +28,8 @@ export interface EmployeeReport {
   violationsShortShift: number;
   violationsTotal: number;
   shifts: EmployeeShiftRow[];
+  page: number;
+  pageSize: number;
 }
 
 export interface EmployeeSummary {
@@ -68,8 +70,31 @@ export class ReportService {
     return { from, to: now, days };
   }
 
-  async getEmployeeReport(employeeId: number, days: number, now: Date = new Date()): Promise<EmployeeReport | null> {
-    const period = this.buildRange(days, now);
+  async getEmployeeReport(
+    employeeId: number,
+    days: number,
+    options?: Date | { page?: number; pageSize?: number }
+  ): Promise<EmployeeReport | null>;
+  async getEmployeeReport(
+    employeeId: number,
+    range: { from: Date; to: Date; days?: number },
+    options?: { page?: number; pageSize?: number }
+  ): Promise<EmployeeReport | null>;
+  async getEmployeeReport(
+    employeeId: number,
+    rangeOrDays: number | { from: Date; to: Date; days?: number },
+    optionsOrNow?: Date | { page?: number; pageSize?: number }
+  ): Promise<EmployeeReport | null> {
+    const pagination = optionsOrNow instanceof Date ? undefined : optionsOrNow;
+    const now = optionsOrNow instanceof Date ? optionsOrNow : new Date();
+
+    const period = typeof rangeOrDays === "number"
+      ? this.buildRange(rangeOrDays, now)
+      : {
+          from: rangeOrDays.from,
+          to: rangeOrDays.to,
+          days: rangeOrDays.days ?? Math.max(1, Math.ceil((rangeOrDays.to.getTime() - rangeOrDays.from.getTime()) / (24 * 60 * 60 * 1000)))
+        };
     const employee = await this.employeeRepo.findById(employeeId);
     if (!employee) {
       return null;
@@ -77,7 +102,17 @@ export class ReportService {
 
     const stats = await this.shiftRepo.aggregateEmployeeStats(employeeId, period.from, period.to);
     const violationCounts = await this.shiftRepo.countEmployeeViolationsByType(employeeId, period.from, period.to);
-    const shifts = await this.shiftRepo.findEmployeeShiftsInRange(employeeId, period.from, period.to, 10);
+    const pageSize = Math.max(1, Math.floor(pagination?.pageSize ?? 10));
+    const totalShifts = stats.totalShifts;
+    const totalPages = totalShifts > 0 ? Math.ceil(totalShifts / pageSize) : 1;
+    const page = Math.min(Math.max(0, pagination?.page ?? 0), totalPages - 1);
+    const skip = page * pageSize;
+    const shifts = totalShifts > 0
+      ? await this.shiftRepo.findEmployeeShiftsInRange(employeeId, period.from, period.to, {
+          limit: pageSize,
+          skip
+        })
+      : [];
 
     const shiftRows: EmployeeShiftRow[] = shifts.map((shift) => ({
       startTime: shift.startTime,
@@ -94,13 +129,15 @@ export class ReportService {
       telegramUserId: employee.telegramUserId,
       displayName: employee.displayName,
       period,
-      totalShifts: stats.totalShifts,
+      totalShifts,
       totalDurationMinutes: stats.totalDurationMinutes,
       averageDurationMinutes: stats.averageDurationMinutes,
       violationsNotClosedInTime: violationCounts.notClosedInTime,
       violationsShortShift: 0,
       violationsTotal: violationCounts.total,
-      shifts: shiftRows
+      shifts: shiftRows,
+      page,
+      pageSize
     };
   }
 
@@ -195,7 +232,7 @@ export class ReportService {
 
   async getEmployeeShiftsForExport(employeeId: number, days: number, now: Date = new Date()): Promise<EmployeeShiftRow[]> {
     const period = this.buildRange(days, now);
-    const shifts = await this.shiftRepo.findEmployeeShiftsInRange(employeeId, period.from, period.to, 10000);
+    const shifts = await this.shiftRepo.findEmployeeShiftsInRange(employeeId, period.from, period.to, { limit: 10000 });
     return shifts.map((shift) => ({
       startTime: shift.startTime,
       endTime: shift.endTime,

@@ -34,7 +34,16 @@ export const buildEmployeeReportMessage = (report: EmployeeReport, tz: string): 
   }
 
   lines.push("");
-  lines.push("Смены (последние 10):");
+  const pageSize = report.pageSize || report.shifts.length || 10;
+  const page = report.page ?? 0;
+  const total = report.totalShifts;
+  const startIndex = total === 0 ? 0 : page * pageSize + 1;
+  const endIndex = total === 0 ? 0 : Math.min(total, page * pageSize + report.shifts.length);
+  if (total <= pageSize) {
+    lines.push("Смены:");
+  } else {
+    lines.push(`Смены (показаны ${startIndex}-${endIndex} из ${total}):`);
+  }
 
   for (const shift of report.shifts) {
     const date = formatDate(shift.startTime, tz);

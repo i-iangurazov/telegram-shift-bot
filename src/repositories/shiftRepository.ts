@@ -27,7 +27,12 @@ export interface ShiftRepository {
   findOverdueShifts(cutoff: Date, take?: number): Promise<ShiftWithRelations[]>;
   autoCloseShift(shiftId: number, endTime: Date, durationMinutes: number, now: Date, tx?: DbClient): Promise<ShiftWithRelations | null>;
   findShiftsInRange(from: Date, to: Date, options?: { limit?: number; order?: "asc" | "desc" }): Promise<ShiftWithRelations[]>;
-  findEmployeeShiftsInRange(employeeId: number, from: Date, to: Date, limit: number): Promise<ShiftWithRelations[]>;
+  findEmployeeShiftsInRange(
+    employeeId: number,
+    from: Date,
+    to: Date,
+    options: { limit: number; skip?: number }
+  ): Promise<ShiftWithRelations[]>;
   findShiftById(shiftId: number): Promise<ShiftWithRelations | null>;
   purgeOldPhotos(cutoff: Date, now: Date, take?: number): Promise<number>;
   aggregateEmployeeStats(employeeId: number, from: Date, to: Date): Promise<{
@@ -221,12 +226,18 @@ export class PrismaShiftRepository implements ShiftRepository {
     });
   }
 
-  async findEmployeeShiftsInRange(employeeId: number, from: Date, to: Date, limit: number): Promise<ShiftWithRelations[]> {
+  async findEmployeeShiftsInRange(
+    employeeId: number,
+    from: Date,
+    to: Date,
+    options: { limit: number; skip?: number }
+  ): Promise<ShiftWithRelations[]> {
     return prisma.shift.findMany({
       where: { employeeId, startTime: { gte: from, lte: to } },
       include: { employee: true, violations: true },
       orderBy: { startTime: "desc" },
-      take: limit
+      skip: options.skip,
+      take: options.limit
     });
   }
 
