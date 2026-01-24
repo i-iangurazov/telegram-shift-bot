@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { env } from "../../../../../config/env";
 import { logger } from "../../../../../config/logger";
 import { prisma } from "../../../../../db/prisma";
+import { getApp } from "../../../../../server/appContainer";
 import { logEvent } from "../../../../../server/logging/eventLog";
 
 export const runtime = "nodejs";
@@ -118,18 +119,18 @@ export async function POST(
     return NextResponse.json({ ok: true });
   }
 
-  try {
-    const updateId = typeof update.update_id === "number" ? update.update_id : null;
-    if (!updateId) {
-      await logEvent(prisma, {
-        level: "error",
-        kind: "webhook_missing_update_id",
-        meta: { topKeys: Object.keys(update) },
-        err: new Error("Missing update_id")
-      });
-      return NextResponse.json({ ok: true });
-    }
+  const updateId = typeof update.update_id === "number" ? update.update_id : null;
+  if (!updateId) {
+    await logEvent(prisma, {
+      level: "error",
+      kind: "webhook_missing_update_id",
+      meta: { topKeys: Object.keys(update) },
+      err: new Error("Missing update_id")
+    });
+    return NextResponse.json({ ok: true });
+  }
 
+  try {
     await prisma.telegramUpdateQueue.upsert({
       where: { updateId },
       update: {},
@@ -149,6 +150,23 @@ export async function POST(
       });
     } catch (logError) {
       logger.error({ err: logError }, "Failed to log webhook queue error");
+    }
+  }
+
+  try {
+    const app = await getApp();
+    await app.bot.handleUpdate(update);
+  } catch (error) {
+    try {
+      const meta = extractUpdateMeta(update);
+      await logEvent(prisma, {
+        level: "error",
+        kind: "webhook_handle_error",
+        ...meta,
+        err: error
+      });
+    } catch (logError) {
+      logger.error({ err: logError }, "Failed to log webhook handle error");
     }
   }
 
