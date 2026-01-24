@@ -27,6 +27,14 @@ export interface EmployeeReport {
   violationsNotClosedInTime: number;
   violationsShortShift: number;
   violationsTotal: number;
+  summary: {
+    totalShifts: number;
+    totalDurationMinutes: number;
+    averageDurationMinutes: number;
+    violationsNotClosedInTime: number;
+    violationsShortShift: number;
+    violationsTotal: number;
+  };
   shifts: EmployeeShiftRow[];
   page: number;
   pageSize: number;
@@ -135,6 +143,14 @@ export class ReportService {
       violationsNotClosedInTime: violationCounts.notClosedInTime,
       violationsShortShift: 0,
       violationsTotal: violationCounts.total,
+      summary: {
+        totalShifts,
+        totalDurationMinutes: stats.totalDurationMinutes,
+        averageDurationMinutes: stats.averageDurationMinutes,
+        violationsNotClosedInTime: violationCounts.notClosedInTime,
+        violationsShortShift: 0,
+        violationsTotal: violationCounts.total
+      },
       shifts: shiftRows,
       page,
       pageSize

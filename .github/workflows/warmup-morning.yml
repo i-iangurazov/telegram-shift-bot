@@ -1,0 +1,19 @@
+name: warmup-morning
+
+on:
+  schedule:
+    - cron: "*/5 2 * * *" # 08:00–08:59 Bishkek (UTC+6)
+    - cron: "*/5 3 * * *" # 09:00–09:59 Bishkek (UTC+6)
+  workflow_dispatch:
+
+jobs:
+  warmup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Warmup internal health
+        run: |
+          curl -sS -f "${PUBLIC_BASE_URL}/api/internal/health" \
+            -H "Authorization: Bearer ${INTERNAL_SECRET}"
+        env:
+          PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
+          INTERNAL_SECRET: ${{ secrets.INTERNAL_SECRET }}

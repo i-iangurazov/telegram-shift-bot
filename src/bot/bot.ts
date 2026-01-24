@@ -10,6 +10,7 @@ import { ExportService } from "../services/exportService";
 import { PendingActionService } from "../services/pendingActionService";
 import { PhotoReviewService } from "../services/photoReviewService";
 import { registerCommands } from "./registerCommands";
+import { applySafeTelegram } from "./safeTelegram";
 import { prisma } from "../db/prisma";
 import { logEvent } from "../server/logging/eventLog";
 
@@ -25,6 +26,7 @@ export const createBot = (deps: {
   photoReviewService: PhotoReviewService;
 }): Telegraf => {
   const bot = new Telegraf(env.telegramBotToken);
+  applySafeTelegram(bot.telegram);
 
   registerCommands(bot, deps);
 

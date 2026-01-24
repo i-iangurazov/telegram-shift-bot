@@ -36,7 +36,7 @@ export const runAutoCloseOnce = async (
     const bossMessage = messages.autoClosedBoss(employeeName, endTime, env.maxShiftHours);
     for (const adminChatId of adminChatIds) {
       const result = await safeSendMessage(bot.telegram, adminChatId, bossMessage);
-      if (result) {
+      if (result.ok) {
         notifiedAdmins += 1;
       }
     }
@@ -47,7 +47,7 @@ export const runAutoCloseOnce = async (
         result.shift.employee.telegramUserId,
         messages.autoClosedEmployee(env.maxShiftHours)
       );
-      if (resultMessage) {
+      if (resultMessage.ok) {
         notifiedEmployees += 1;
       }
     }

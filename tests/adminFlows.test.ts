@@ -1,5 +1,5 @@
 import { ClosedReason, EmployeeRoleOverride } from "@prisma/client";
-import { buildEmployeeListKeyboard, buildAllPeriodKeyboard } from "../src/bot/keyboards/adminReportKeyboards";
+import { buildEmployeeListKeyboard, buildAllPeriodKeyboard, buildEmployeeReportPaginationKeyboard } from "../src/bot/keyboards/adminReportKeyboards";
 import { buildEmployeeReportMessage, buildAllEmployeesReportMessage } from "../src/bot/formatters/adminReportFormatter";
 import { messages } from "../src/bot/messages";
 
@@ -54,6 +54,14 @@ describe("Admin flows UI", () => {
       violationsNotClosedInTime: 0,
       violationsShortShift: 0,
       violationsTotal: 0,
+      summary: {
+        totalShifts: 1,
+        totalDurationMinutes: 480,
+        averageDurationMinutes: 480,
+        violationsNotClosedInTime: 0,
+        violationsShortShift: 0,
+        violationsTotal: 0
+      },
       shifts: [
         {
           startTime: new Date("2024-01-01T08:00:00Z"),
@@ -121,6 +129,14 @@ describe("Admin flows UI", () => {
       violationsNotClosedInTime: 0,
       violationsShortShift: 0,
       violationsTotal: 0,
+      summary: {
+        totalShifts: 2,
+        totalDurationMinutes: 960,
+        averageDurationMinutes: 480,
+        violationsNotClosedInTime: 0,
+        violationsShortShift: 0,
+        violationsTotal: 0
+      },
       shifts: buildShiftRows(2),
       page: 0,
       pageSize: 10
@@ -142,6 +158,14 @@ describe("Admin flows UI", () => {
       violationsNotClosedInTime: 1,
       violationsShortShift: 0,
       violationsTotal: 1,
+      summary: {
+        totalShifts: 12,
+        totalDurationMinutes: 5760,
+        averageDurationMinutes: 480,
+        violationsNotClosedInTime: 1,
+        violationsShortShift: 0,
+        violationsTotal: 1
+      },
       shifts: buildShiftRows(10),
       page: 0,
       pageSize: 10
@@ -162,6 +186,14 @@ describe("Admin flows UI", () => {
       violationsNotClosedInTime: 0,
       violationsShortShift: 0,
       violationsTotal: 0,
+      summary: {
+        totalShifts: 12,
+        totalDurationMinutes: 5760,
+        averageDurationMinutes: 480,
+        violationsNotClosedInTime: 0,
+        violationsShortShift: 0,
+        violationsTotal: 0
+      },
       shifts: buildShiftRows(2),
       page: 1,
       pageSize: 10
@@ -173,5 +205,48 @@ describe("Admin flows UI", () => {
   it("period keyboard exists for all employees", () => {
     const keyboard = buildAllPeriodKeyboard();
     expect(keyboard.reply_markup.inline_keyboard.flat().length).toBeGreaterThan(0);
+  });
+
+  it("pagination keyboard shows next only on first page", () => {
+    const keyboard = buildEmployeeReportPaginationKeyboard({
+      employeeId: 10,
+      days: 30,
+      page: 0,
+      pageSize: 10,
+      totalShifts: 12
+    });
+
+    const labels = keyboard.reply_markup.inline_keyboard.flat().map((button) => button.text);
+    expect(labels).toContain("➡️ Далее");
+    expect(labels).toContain("📄 Экспорт");
+    expect(labels).not.toContain("⬅️ Назад");
+  });
+
+  it("pagination keyboard shows back only on last page", () => {
+    const keyboard = buildEmployeeReportPaginationKeyboard({
+      employeeId: 10,
+      days: 30,
+      page: 1,
+      pageSize: 10,
+      totalShifts: 12
+    });
+
+    const labels = keyboard.reply_markup.inline_keyboard.flat().map((button) => button.text);
+    expect(labels).toContain("⬅️ Назад");
+    expect(labels).toContain("📄 Экспорт");
+    expect(labels).not.toContain("➡️ Далее");
+  });
+
+  it("pagination keyboard hides back/next when total <= page size", () => {
+    const keyboard = buildEmployeeReportPaginationKeyboard({
+      employeeId: 10,
+      days: 7,
+      page: 0,
+      pageSize: 10,
+      totalShifts: 2
+    });
+
+    const labels = keyboard.reply_markup.inline_keyboard.flat().map((button) => button.text);
+    expect(labels).toEqual(["📄 Экспорт"]);
   });
 });

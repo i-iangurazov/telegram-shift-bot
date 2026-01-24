@@ -7,6 +7,7 @@ import { runPhotoRetentionCleanupOnce } from "../../../../jobs/tasks/photoRetent
 import { runProcessUpdateQueueOnce } from "../../../../jobs/tasks/processUpdateQueueTask";
 import { logger } from "../../../../config/logger";
 import { logEvent } from "../../../../server/logging/eventLog";
+import { safeSendMessage } from "../../../../bot/utils/safeSendMessage";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,73 @@ const isAuthorized = (req: NextRequest): boolean => {
   const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
   const headerSecret = req.headers.get("x-internal-secret");
   return bearer === env.internalSecret || headerSecret === env.internalSecret;
+};
+
+const monitorQueueBacklog = async (params: {
+  prisma: Awaited<ReturnType<typeof getApp>>["prisma"];
+  bot: Awaited<ReturnType<typeof getApp>>["bot"];
+  now: Date;
+}): Promise<void> => {
+  const oldestPending = await params.prisma.telegramUpdateQueue.findFirst({
+    where: { status: "pending" },
+    orderBy: { createdAt: "asc" },
+    select: { createdAt: true }
+  });
+
+  if (!oldestPending) {
+    return;
+  }
+
+  const ageSeconds = Math.floor((params.now.getTime() - oldestPending.createdAt.getTime()) / 1000);
+  if (ageSeconds <= 180) {
+    return;
+  }
+
+  await logEvent(params.prisma, {
+    level: "warn",
+    kind: "queue_backlog_detected",
+    meta: {
+      ageSeconds,
+      oldestCreatedAt: oldestPending.createdAt.toISOString()
+    }
+  });
+
+  const alertCutoff = new Date(params.now.getTime() - 60 * 60 * 1000);
+  const recentAlert = await params.prisma.eventLog.findFirst({
+    where: {
+      kind: "queue_backlog_alert_sent",
+      createdAt: { gte: alertCutoff }
+    },
+    select: { id: true }
+  });
+
+  if (recentAlert || !env.telegramBossChatId) {
+    return;
+  }
+
+  const message = `⚠️ Очередь Telegram отстаёт: старейшая запись ${ageSeconds} сек.`;
+  const sendResult = await safeSendMessage(params.bot.telegram, env.telegramBossChatId, message);
+
+  if (sendResult.ok) {
+    await logEvent(params.prisma, {
+      level: "warn",
+      kind: "queue_backlog_alert_sent",
+      meta: {
+        ageSeconds,
+        oldestCreatedAt: oldestPending.createdAt.toISOString()
+      }
+    });
+  } else {
+    await logEvent(params.prisma, {
+      level: "warn",
+      kind: "queue_backlog_alert_failed",
+      meta: {
+        ageSeconds,
+        oldestCreatedAt: oldestPending.createdAt.toISOString(),
+        reason: sendResult.reason
+      }
+    });
+  }
 };
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -52,6 +120,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         now: ranAt,
         limit: env.tickMaxAutoclose
       });
+    }
+
+    if (mode === "regular") {
+      await monitorQueueBacklog({ prisma: app.prisma, bot: app.bot, now: ranAt });
     }
 
     let photosPurged = 0;

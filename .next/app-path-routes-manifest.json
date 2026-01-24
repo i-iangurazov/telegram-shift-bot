@@ -1,1 +1,1 @@
-{"/_not-found/page":"/_not-found","/page":"/","/api/internal/tick/route":"/api/internal/tick","/api/telegram/webhook/[secret]/route":"/api/telegram/webhook/[secret]"}
+{"/_not-found/page":"/_not-found","/page":"/","/api/internal/tick/route":"/api/internal/tick","/api/internal/health/route":"/api/internal/health","/api/telegram/webhook/[secret]/route":"/api/telegram/webhook/[secret]"}

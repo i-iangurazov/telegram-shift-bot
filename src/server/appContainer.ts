@@ -14,6 +14,7 @@ import { ExportService } from "../services/exportService";
 import { PendingActionService } from "../services/pendingActionService";
 import { PhotoReviewService } from "../services/photoReviewService";
 import { createBot } from "../bot/bot";
+import { logEvent } from "./logging/eventLog";
 
 export interface AppContainer {
   prisma: typeof prisma;
@@ -37,7 +38,32 @@ const globalForApp = globalThis as unknown as {
 export const getApp = async (): Promise<AppContainer> => {
   if (!globalForApp.__shiftBotApp) {
     globalForApp.__shiftBotApp = (async () => {
-      await prisma.$connect();
+      const maxAttempts = 3;
+      let lastError: unknown = null;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          await prisma.$connect();
+          lastError = null;
+          break;
+        } catch (error) {
+          lastError = error;
+          try {
+            await logEvent(prisma, {
+              level: "error",
+              kind: "prisma_connect_error",
+              meta: { attempt, maxAttempts },
+              err: error
+            });
+          } catch {
+            // ignore logging failures
+          }
+          const delay = 200 * attempt + Math.floor(Math.random() * 100);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+      if (lastError) {
+        throw lastError;
+      }
 
       const employeeRepo = new PrismaEmployeeRepository();
       const shiftRepo = new PrismaShiftRepository();

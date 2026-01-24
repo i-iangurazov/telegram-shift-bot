@@ -91,10 +91,11 @@ docker compose up -d --build
 - Для защиты от повторной обработки сохраняется `message_id` вместе с `chat_id`.
 
 ## Вебхуки и тикер
-- Вебхук: `POST /api/telegram/webhook/<WEBHOOK_SECRET>`.
+- Вебхук: `POST /api/telegram/webhook/<WEBHOOK_SECRET>` — **обрабатывает обновления сразу** (реальное время) и параллельно кладёт их в очередь для идемпотентности.
 - Internal tick: `POST /api/internal/tick` (обычный), `POST /api/internal/tick?mode=queue` или `POST /api/internal/tick?mode=daily`.
 - Авторизация internal tick: `Authorization: Bearer <INTERNAL_SECRET>` или заголовок `x-internal-secret`.
-- Вебхук только ставит обновления в очередь, обработка идёт через tick-queue.
+- Очередь используется как запасной механизм и для наблюдаемости.
+- Health/Warmup: `GET /api/internal/health` — быстрый пинг БД и инстанса.
 
 ### GitHub Actions
 Добавьте секреты в GitHub:
@@ -105,6 +106,11 @@ docker compose up -d --build
 - `.github/workflows/tick-regular.yml` — каждые 30 минут.
 - `.github/workflows/tick-queue.yml` — каждые 5 минут (обработка очереди обновлений).
 - `.github/workflows/tick-daily.yml` — каждый день в 03:05.
+- `.github/workflows/warmup-morning.yml` — прогрев в пиковое время 08:00–09:59 по Бишкеку (UTC+6).
+
+## Надёжность
+- Отправка сообщений в Telegram имеет ретраи на 429/5xx/сетевые сбои.
+- Если очередь отстаёт > 180 сек, отправляется уведомление руководителю (не чаще 1 раза в час).
 
 ## Скрипты вебхука
 ```bash
