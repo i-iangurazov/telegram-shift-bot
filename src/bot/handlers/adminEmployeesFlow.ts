@@ -22,6 +22,10 @@ import { adminKeyboard } from "../keyboards/roleKeyboards";
 import { logger } from "../../config/logger";
 import { formatDurationMinutes } from "../../utils/format";
 import { formatDateTime, formatShortDateTime } from "../../utils/time";
+import {
+  ReportPeriodKey,
+  resolveReportRangeToken
+} from "../reports/reportPeriods";
 
 const PAGE_SIZE = 8;
 
@@ -66,12 +70,12 @@ const parseEmpActionData = (data: string): { action: string; employeeId: number;
   };
 };
 
-const parsePeriodEmpData = (data: string): { days: number; employeeId: number } => {
+const parsePeriodEmpData = (data: string): { periodToken: string; employeeId: number } => {
   const parts = data.split(":");
-  const days = Number(parts[1] ?? "0");
+  const periodToken = parts[1] ?? "";
   const employeeId = Number(parts[2] ?? "0");
   return {
-    days: Number.isFinite(days) ? days : 0,
+    periodToken,
     employeeId: Number.isFinite(employeeId) ? employeeId : 0
   };
 };
@@ -104,6 +108,38 @@ const buildShiftLabel = (params: {
       : "Открыта";
   const violation = formatViolationsPresence(params.violations);
   return `${when} — ${reason} — ${violation}`;
+};
+
+const mapLegacyDaysToPeriodKey = (days: number): ReportPeriodKey => {
+  if (days <= 3) {
+    return "3d";
+  }
+  if (days <= 7) {
+    return "7d";
+  }
+  if (days <= 30) {
+    return "30d";
+  }
+  if (days >= 330) {
+    return "12m";
+  }
+  return "30d";
+};
+
+const resolvePeriodToken = (
+  token: string
+): { range: { from: Date; to: Date; days: number }; periodKey: ReportPeriodKey } | null => {
+  const resolved = resolveReportRangeToken({
+    token,
+    timezone: env.timezone
+  });
+  if (!resolved) {
+    return null;
+  }
+  return {
+    range: resolved.range,
+    periodKey: resolved.periodKey ?? mapLegacyDaysToPeriodKey(resolved.range.days)
+  };
 };
 
 export const registerAdminEmployeesFlow = (
@@ -258,14 +294,15 @@ export const registerAdminEmployeesFlow = (
   bot.action(/^period_emp:/, guard, async (ctx) => {
     await ctx.answerCbQuery();
     const data = "data" in ctx.callbackQuery ? ctx.callbackQuery.data : "";
-    const { days, employeeId } = parsePeriodEmpData(data);
+    const { periodToken, employeeId } = parsePeriodEmpData(data);
+    const period = resolvePeriodToken(periodToken);
 
-    if (!days || !employeeId) {
+    if (!period || !employeeId) {
       return;
     }
 
     try {
-      const report = await reportService.getEmployeeReport(employeeId, days, { page: 0, pageSize: 10 });
+      const report = await reportService.getEmployeeReport(employeeId, period.range, { page: 0, pageSize: 10 });
       if (!report) {
         await ctx.reply(messages.noEmployeesFound);
         return;
@@ -274,7 +311,7 @@ export const registerAdminEmployeesFlow = (
       const message = buildEmployeeReportMessage(report, env.timezone);
       const keyboard = buildEmployeeReportPaginationKeyboard({
         employeeId,
-        days,
+        periodKey: period.periodKey,
         page: report.page,
         pageSize: report.pageSize,
         totalShifts: report.totalShifts
@@ -291,16 +328,17 @@ export const registerAdminEmployeesFlow = (
     const data = "data" in ctx.callbackQuery ? ctx.callbackQuery.data : "";
     const parts = data.split(":");
     const employeeId = Number(parts[1] ?? "0");
-    const days = Number(parts[2] ?? "0");
+    const periodToken = parts[2] ?? "";
     const page = Number(parts[3] ?? "0");
+    const period = resolvePeriodToken(periodToken);
 
-    if (!employeeId || !days || !Number.isFinite(page)) {
+    if (!employeeId || !period || !Number.isFinite(page)) {
       await ctx.reply("Данные устарели. Сформируйте отчёт заново.");
       return;
     }
 
     try {
-      const report = await reportService.getEmployeeReport(employeeId, days, { page, pageSize: 10 });
+      const report = await reportService.getEmployeeReport(employeeId, period.range, { page, pageSize: 10 });
       if (!report) {
         await ctx.reply("Данные устарели. Сформируйте отчёт заново.");
         return;
@@ -309,7 +347,7 @@ export const registerAdminEmployeesFlow = (
       const message = buildEmployeeReportMessage(report, env.timezone);
       const keyboard = buildEmployeeReportPaginationKeyboard({
         employeeId,
-        days,
+        periodKey: period.periodKey,
         page: report.page,
         pageSize: report.pageSize,
         totalShifts: report.totalShifts
@@ -450,20 +488,21 @@ export const registerAdminEmployeesFlow = (
     const data = "data" in ctx.callbackQuery ? ctx.callbackQuery.data : "";
     const parts = data.split(":");
     const format = parts[1];
-    const days = Number(parts[2] ?? "0");
+    const periodToken = parts[2] ?? "";
     const employeeId = Number(parts[3] ?? "0");
+    const period = resolvePeriodToken(periodToken);
 
-    if (format !== "csv" || !days || !employeeId) {
+    if (format !== "csv" || !period || !employeeId) {
       return;
     }
 
     try {
-      const report = await reportService.getEmployeeReport(employeeId, days);
+      const report = await reportService.getEmployeeReport(employeeId, period.range);
       if (!report) {
         await ctx.reply(messages.noEmployeesFound);
         return;
       }
-      const shifts = await reportService.getEmployeeShiftsForExport(employeeId, days);
+      const shifts = await reportService.getEmployeeShiftsForExport(employeeId, period.range);
       const reportForExport = { ...report, shifts };
       const file = exportService.buildEmployeeReportCsv(reportForExport, env.timezone);
       await ctx.replyWithDocument({ source: file.content, filename: file.filename });
@@ -478,20 +517,21 @@ export const registerAdminEmployeesFlow = (
     const data = "data" in ctx.callbackQuery ? ctx.callbackQuery.data : "";
     const parts = data.split(":");
     const employeeId = Number(parts[1] ?? "0");
-    const days = Number(parts[2] ?? "0");
+    const periodToken = parts[2] ?? "";
+    const period = resolvePeriodToken(periodToken);
 
-    if (!employeeId || !days) {
+    if (!employeeId || !period) {
       await ctx.reply("Данные устарели. Сформируйте отчёт заново.");
       return;
     }
 
     try {
-      const report = await reportService.getEmployeeReport(employeeId, days);
+      const report = await reportService.getEmployeeReport(employeeId, period.range);
       if (!report) {
         await ctx.reply(messages.noEmployeesFound);
         return;
       }
-      const shifts = await reportService.getEmployeeShiftsForExport(employeeId, days);
+      const shifts = await reportService.getEmployeeShiftsForExport(employeeId, period.range);
       const reportForExport = { ...report, shifts };
       const file = exportService.buildEmployeeReportCsv(reportForExport, env.timezone);
       await ctx.replyWithDocument({ source: file.content, filename: file.filename });

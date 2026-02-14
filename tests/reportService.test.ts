@@ -106,4 +106,61 @@ describe("ReportService", () => {
     expect(report.totalViolations).toBe(1);
     expect(report.topEmployees).toHaveLength(2);
   });
+
+  it("supports explicit range in all employees report", async () => {
+    const db = new InMemoryDatabase();
+    const employeeRepo = new InMemoryEmployeeRepository(db);
+    const shiftRepo = new InMemoryShiftRepository(db);
+    const reportService = new ReportService(shiftRepo, employeeRepo);
+
+    const employee = await employeeRepo.upsertFromTelegram({
+      id: 401,
+      username: "user401",
+      firstName: "Мария",
+      lastName: "Смирнова",
+      chatId: 401
+    });
+
+    const januaryShift = await shiftRepo.createShiftStart({
+      employeeId: employee.id,
+      startTime: new Date("2024-01-15T08:00:00Z"),
+      startPhotoFileId: "jan-start",
+      startMessageId: 1,
+      startChatId: "401"
+    });
+
+    await shiftRepo.closeShiftByUserPhoto({
+      shiftId: januaryShift.id,
+      endTime: new Date("2024-01-15T16:00:00Z"),
+      endPhotoFileId: "jan-end",
+      endMessageId: 2,
+      endChatId: "401",
+      durationMinutes: 480
+    });
+
+    const februaryShift = await shiftRepo.createShiftStart({
+      employeeId: employee.id,
+      startTime: new Date("2024-02-10T08:00:00Z"),
+      startPhotoFileId: "feb-start",
+      startMessageId: 3,
+      startChatId: "401"
+    });
+
+    await shiftRepo.closeShiftByUserPhoto({
+      shiftId: februaryShift.id,
+      endTime: new Date("2024-02-10T16:00:00Z"),
+      endPhotoFileId: "feb-end",
+      endMessageId: 4,
+      endChatId: "401",
+      durationMinutes: 480
+    });
+
+    const report = await reportService.getAllEmployeesReport({
+      from: new Date("2024-02-01T00:00:00Z"),
+      to: new Date("2024-02-29T23:59:59Z")
+    });
+
+    expect(report.totalShifts).toBe(1);
+    expect(report.period.from.toISOString()).toBe("2024-02-01T00:00:00.000Z");
+  });
 });

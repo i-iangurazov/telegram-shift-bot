@@ -8,6 +8,8 @@ export interface PeriodRange {
   days: number;
 }
 
+type RangeInput = number | { from: Date; to: Date; days?: number };
+
 export interface EmployeeShiftRow {
   startTime: Date;
   endTime: Date | null;
@@ -78,6 +80,18 @@ export class ReportService {
     return { from, to: now, days };
   }
 
+  private normalizeRange(rangeOrDays: RangeInput, now: Date = new Date()): PeriodRange {
+    if (typeof rangeOrDays === "number") {
+      return this.buildRange(rangeOrDays, now);
+    }
+
+    const from = rangeOrDays.from;
+    const to = rangeOrDays.to;
+    const days = rangeOrDays.days
+      ?? Math.max(1, Math.ceil((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)));
+    return { from, to, days };
+  }
+
   async getEmployeeReport(
     employeeId: number,
     days: number,
@@ -90,19 +104,13 @@ export class ReportService {
   ): Promise<EmployeeReport | null>;
   async getEmployeeReport(
     employeeId: number,
-    rangeOrDays: number | { from: Date; to: Date; days?: number },
+    rangeOrDays: RangeInput,
     optionsOrNow?: Date | { page?: number; pageSize?: number }
   ): Promise<EmployeeReport | null> {
     const pagination = optionsOrNow instanceof Date ? undefined : optionsOrNow;
     const now = optionsOrNow instanceof Date ? optionsOrNow : new Date();
 
-    const period = typeof rangeOrDays === "number"
-      ? this.buildRange(rangeOrDays, now)
-      : {
-          from: rangeOrDays.from,
-          to: rangeOrDays.to,
-          days: rangeOrDays.days ?? Math.max(1, Math.ceil((rangeOrDays.to.getTime() - rangeOrDays.from.getTime()) / (24 * 60 * 60 * 1000)))
-        };
+    const period = this.normalizeRange(rangeOrDays, now);
     const employee = await this.employeeRepo.findById(employeeId);
     if (!employee) {
       return null;
@@ -157,8 +165,13 @@ export class ReportService {
     };
   }
 
-  async getAllEmployeesReport(days: number, now: Date = new Date()): Promise<AllEmployeesReport> {
-    const period = this.buildRange(days, now);
+  async getAllEmployeesReport(days: number, now?: Date): Promise<AllEmployeesReport>;
+  async getAllEmployeesReport(range: { from: Date; to: Date; days?: number }): Promise<AllEmployeesReport>;
+  async getAllEmployeesReport(
+    rangeOrDays: RangeInput,
+    now: Date = new Date()
+  ): Promise<AllEmployeesReport> {
+    const period = this.normalizeRange(rangeOrDays, now);
     const stats = await this.shiftRepo.groupByEmployeeStats(period.from, period.to);
     const violationsByType = await this.shiftRepo.countViolationsByEmployeeAndType(period.from, period.to);
     const lastShifts = await this.shiftRepo.findLastShiftsByEmployee(period.from, period.to);
@@ -246,8 +259,17 @@ export class ReportService {
     };
   }
 
-  async getEmployeeShiftsForExport(employeeId: number, days: number, now: Date = new Date()): Promise<EmployeeShiftRow[]> {
-    const period = this.buildRange(days, now);
+  async getEmployeeShiftsForExport(employeeId: number, days: number, now?: Date): Promise<EmployeeShiftRow[]>;
+  async getEmployeeShiftsForExport(
+    employeeId: number,
+    range: { from: Date; to: Date; days?: number }
+  ): Promise<EmployeeShiftRow[]>;
+  async getEmployeeShiftsForExport(
+    employeeId: number,
+    rangeOrDays: RangeInput,
+    now: Date = new Date()
+  ): Promise<EmployeeShiftRow[]> {
+    const period = this.normalizeRange(rangeOrDays, now);
     const shifts = await this.shiftRepo.findEmployeeShiftsInRange(employeeId, period.from, period.to, { limit: 10000 });
     return shifts.map((shift) => ({
       startTime: shift.startTime,
@@ -260,7 +282,40 @@ export class ReportService {
     }));
   }
 
-  async getRawShiftsForExport(days: number, now: Date = new Date(), limit = 5000): Promise<{
+  async getRawShiftsForExport(days: number, now?: Date, limit?: number): Promise<{
+    period: PeriodRange;
+    shifts: Array<{
+      employeeId: number;
+      telegramUserId: string;
+      displayName: string;
+      startTime: Date;
+      endTime: Date | null;
+      durationMinutes: number | null;
+      closedReason: ClosedReason | null;
+      violations: ViolationType[];
+    }>;
+  }>;
+  async getRawShiftsForExport(
+    range: { from: Date; to: Date; days?: number },
+    limit?: number
+  ): Promise<{
+    period: PeriodRange;
+    shifts: Array<{
+      employeeId: number;
+      telegramUserId: string;
+      displayName: string;
+      startTime: Date;
+      endTime: Date | null;
+      durationMinutes: number | null;
+      closedReason: ClosedReason | null;
+      violations: ViolationType[];
+    }>;
+  }>;
+  async getRawShiftsForExport(
+    rangeOrDays: RangeInput,
+    nowOrLimit: Date | number = new Date(),
+    maybeLimit = 5000
+  ): Promise<{
     period: PeriodRange;
     shifts: Array<{
       employeeId: number;
@@ -273,8 +328,13 @@ export class ReportService {
       violations: ViolationType[];
     }>;
   }> {
-    const period = this.buildRange(days, now);
-    const shifts = await this.shiftRepo.findShiftsInRange(period.from, period.to, { limit, order: "asc" });
+    const now = nowOrLimit instanceof Date ? nowOrLimit : new Date();
+    const limit = typeof nowOrLimit === "number" ? nowOrLimit : maybeLimit;
+    const period = this.normalizeRange(rangeOrDays, now);
+    const shifts = await this.shiftRepo.findShiftsInRange(period.from, period.to, {
+      limit,
+      order: "asc"
+    });
     return {
       period,
       shifts: shifts.map((shift) => ({

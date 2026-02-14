@@ -1,5 +1,6 @@
 import { Markup } from "telegraf";
 import { EmployeeRecord } from "../../domain/types";
+import { ReportPeriodKey } from "../reports/reportPeriods";
 
 const encodeQuery = (query: string): string => encodeURIComponent(query);
 
@@ -51,10 +52,17 @@ export const buildEmployeePeriodKeyboard = (params: {
   const backCallback = params.backAction ?? `emp_page:${params.backPage}:${query}`;
   return Markup.inlineKeyboard([
     [
-      Markup.button.callback("За 3 дня", `period_emp:3:${params.employeeId}`),
-      Markup.button.callback("За 7 дней", `period_emp:7:${params.employeeId}`)
+      Markup.button.callback("За 3 дня", `period_emp:3d:${params.employeeId}`),
+      Markup.button.callback("За 7 дней", `period_emp:7d:${params.employeeId}`)
     ],
-    [Markup.button.callback("За 30 дней", `period_emp:30:${params.employeeId}`)],
+    [
+      Markup.button.callback("За 30 дней", `period_emp:30d:${params.employeeId}`),
+      Markup.button.callback("Этот месяц", `period_emp:current_month:${params.employeeId}`)
+    ],
+    [
+      Markup.button.callback("Прошлый месяц", `period_emp:previous_month:${params.employeeId}`),
+      Markup.button.callback("За 12 месяцев", `period_emp:12m:${params.employeeId}`)
+    ],
     [Markup.button.callback("Назад", backCallback)]
   ]);
 };
@@ -91,20 +99,30 @@ export const buildPhotoShiftListKeyboard = (params: {
 
 export const buildAllPeriodKeyboard = (): ReturnType<typeof Markup.inlineKeyboard> => {
   return Markup.inlineKeyboard([
-    [Markup.button.callback("За 3 дня", "period_all:3"), Markup.button.callback("За 7 дней", "period_all:7")],
-    [Markup.button.callback("За 30 дней", "period_all:30")]
+    [Markup.button.callback("За 3 дня", "period_all:3d"), Markup.button.callback("За 7 дней", "period_all:7d")],
+    [
+      Markup.button.callback("За 30 дней", "period_all:30d"),
+      Markup.button.callback("Этот месяц", "period_all:current_month")
+    ],
+    [
+      Markup.button.callback("Прошлый месяц", "period_all:previous_month"),
+      Markup.button.callback("За 12 месяцев", "period_all:12m")
+    ]
   ]);
 };
 
-export const buildEmployeeExportKeyboard = (employeeId: number, days: number): ReturnType<typeof Markup.inlineKeyboard> => {
+export const buildEmployeeExportKeyboard = (
+  employeeId: number,
+  periodKey: ReportPeriodKey
+): ReturnType<typeof Markup.inlineKeyboard> => {
   return Markup.inlineKeyboard([
-    [Markup.button.callback("Экспорт CSV", `emp_rep_export:${employeeId}:${days}`)]
+    [Markup.button.callback("Экспорт CSV", `emp_rep_export:${employeeId}:${periodKey}`)]
   ]);
 };
 
 export const buildEmployeeReportPaginationKeyboard = (params: {
   employeeId: number;
-  days: number;
+  periodKey: ReportPeriodKey;
   page: number;
   pageSize: number;
   totalShifts: number;
@@ -115,20 +133,20 @@ export const buildEmployeeReportPaginationKeyboard = (params: {
   const hasNext = hasPages && (params.page + 1) * params.pageSize < params.totalShifts;
 
   if (hasPrev) {
-    buttons.push(Markup.button.callback("⬅️ Назад", `emp_rep:${params.employeeId}:${params.days}:${params.page - 1}`));
+    buttons.push(Markup.button.callback("⬅️ Назад", `emp_rep:${params.employeeId}:${params.periodKey}:${params.page - 1}`));
   }
   if (hasNext) {
-    buttons.push(Markup.button.callback("➡️ Далее", `emp_rep:${params.employeeId}:${params.days}:${params.page + 1}`));
+    buttons.push(Markup.button.callback("➡️ Далее", `emp_rep:${params.employeeId}:${params.periodKey}:${params.page + 1}`));
   }
-  buttons.push(Markup.button.callback("📄 Экспорт", `emp_rep_export:${params.employeeId}:${params.days}`));
+  buttons.push(Markup.button.callback("📄 Экспорт", `emp_rep_export:${params.employeeId}:${params.periodKey}`));
 
   return Markup.inlineKeyboard([buttons]);
 };
 
-export const buildAllExportKeyboard = (days: number): ReturnType<typeof Markup.inlineKeyboard> => {
+export const buildAllExportKeyboard = (periodKey: ReportPeriodKey): ReturnType<typeof Markup.inlineKeyboard> => {
   return Markup.inlineKeyboard([
     [
-      Markup.button.callback("Экспорт CSV", `export_all:csv:${days}`),
+      Markup.button.callback("Экспорт CSV", `export_all:csv:${periodKey}`),
       Markup.button.callback("Сотрудники", "emp_page:1:")
     ]
   ]);

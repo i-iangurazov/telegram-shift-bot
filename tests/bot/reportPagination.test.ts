@@ -63,7 +63,7 @@ test("pagination next edits report message and updates list", async () => {
     updateId: 100,
     chatId: 900,
     fromId: 900,
-    data: `period_emp:30:${employee.id}`,
+    data: `period_emp:30d:${employee.id}`,
     messageId: 1
   });
 
@@ -78,7 +78,7 @@ test("pagination next edits report message and updates list", async () => {
     updateId: 101,
     chatId: 900,
     fromId: 900,
-    data: `emp_rep:${employee.id}:30:1`,
+    data: `emp_rep:${employee.id}:30d:1`,
     messageId: 1
   });
 
@@ -103,7 +103,7 @@ test("export callback sends document for full range", async () => {
     updateId: 200,
     chatId: 901,
     fromId: 901,
-    data: `emp_rep_export:${employee.id}:30`,
+    data: `emp_rep_export:${employee.id}:30d`,
     messageId: 2
   });
 
@@ -111,4 +111,51 @@ test("export callback sends document for full range", async () => {
 
   const documentCall = calls.find((call) => call.method === "sendDocument");
   expect(documentCall).toBeTruthy();
+});
+
+test("legacy day-based callbacks are still supported", async () => {
+  const deps = buildDeps();
+  await deps.adminService.addAdmin("902");
+  const bot = createBot(deps);
+  const { calls, getMessages } = attachFakeTelegram(bot);
+
+  const base = new Date();
+  const employee = await seedEmployeeWithShifts({ employeeId: "502", count: 12, base });
+
+  const legacyPeriodUpdate = makeCallbackUpdate({
+    updateId: 300,
+    chatId: 902,
+    fromId: 902,
+    data: `period_emp:30:${employee.id}`,
+    messageId: 3
+  });
+  await bot.handleUpdate(legacyPeriodUpdate as any);
+
+  const initialText = getMessages()[0]?.payload?.text ?? "";
+  expect(initialText).toContain("Смены (показаны 1-10 из 12):");
+
+  const legacyNextUpdate = makeCallbackUpdate({
+    updateId: 301,
+    chatId: 902,
+    fromId: 902,
+    data: `emp_rep:${employee.id}:30:1`,
+    messageId: 3
+  });
+  await bot.handleUpdate(legacyNextUpdate as any);
+
+  const editCalls = calls.filter((call) => call.method === "editMessageText");
+  const lastEdit = editCalls[editCalls.length - 1];
+  expect(lastEdit?.payload?.text).toContain("Смены (показаны 11-12 из 12):");
+
+  const legacyExportUpdate = makeCallbackUpdate({
+    updateId: 302,
+    chatId: 902,
+    fromId: 902,
+    data: `emp_rep_export:${employee.id}:30`,
+    messageId: 3
+  });
+  await bot.handleUpdate(legacyExportUpdate as any);
+
+  const documentCalls = calls.filter((call) => call.method === "sendDocument");
+  expect(documentCalls.length).toBeGreaterThan(0);
 });

@@ -204,13 +204,16 @@ describe("Admin flows UI", () => {
 
   it("period keyboard exists for all employees", () => {
     const keyboard = buildAllPeriodKeyboard();
-    expect(keyboard.reply_markup.inline_keyboard.flat().length).toBeGreaterThan(0);
+    const labels = keyboard.reply_markup.inline_keyboard.flat().map((button) => button.text);
+    expect(labels).toContain("Этот месяц");
+    expect(labels).toContain("Прошлый месяц");
+    expect(labels).toContain("За 12 месяцев");
   });
 
   it("pagination keyboard shows next only on first page", () => {
     const keyboard = buildEmployeeReportPaginationKeyboard({
       employeeId: 10,
-      days: 30,
+      periodKey: "30d",
       page: 0,
       pageSize: 10,
       totalShifts: 12
@@ -225,7 +228,7 @@ describe("Admin flows UI", () => {
   it("pagination keyboard shows back only on last page", () => {
     const keyboard = buildEmployeeReportPaginationKeyboard({
       employeeId: 10,
-      days: 30,
+      periodKey: "30d",
       page: 1,
       pageSize: 10,
       totalShifts: 12
@@ -240,7 +243,7 @@ describe("Admin flows UI", () => {
   it("pagination keyboard hides back/next when total <= page size", () => {
     const keyboard = buildEmployeeReportPaginationKeyboard({
       employeeId: 10,
-      days: 7,
+      periodKey: "7d",
       page: 0,
       pageSize: 10,
       totalShifts: 2
