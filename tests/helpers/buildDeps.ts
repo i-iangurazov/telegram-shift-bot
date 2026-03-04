@@ -13,6 +13,7 @@ import { RoleService } from "../../src/services/roleService";
 import { ExportService } from "../../src/services/exportService";
 import { PendingActionService } from "../../src/services/pendingActionService";
 import { PhotoReviewService } from "../../src/services/photoReviewService";
+import { DigestService } from "../../src/services/digestService";
 
 export const buildDeps = () => {
   const employeeRepo = new PrismaEmployeeRepository();
@@ -36,6 +37,7 @@ export const buildDeps = () => {
   const roleService = new RoleService(adminService, employeeRepo, userSessionRepo);
   const exportService = new ExportService();
   const photoReviewService = new PhotoReviewService(shiftRepo);
+  const digestService = new DigestService(shiftRepo);
   const pendingActionService = new PendingActionService(
     employeeRepo,
     shiftRepo,
@@ -62,6 +64,7 @@ export const buildDeps = () => {
     roleService,
     exportService,
     pendingActionService,
-    photoReviewService
+    photoReviewService,
+    digestService
   };
 };

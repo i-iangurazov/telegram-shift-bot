@@ -8,6 +8,7 @@ import { UserSessionRepository } from "../repositories/userSessionRepository";
 import { ExportService } from "../services/exportService";
 import { PendingActionService } from "../services/pendingActionService";
 import { PhotoReviewService } from "../services/photoReviewService";
+import { DigestService } from "../services/digestService";
 import { registerStartCommand } from "./handlers/startCommand";
 import { registerStatusCommand } from "./handlers/statusCommand";
 import { registerAdminEmployeesFlow } from "./handlers/adminEmployeesFlow";
@@ -32,6 +33,7 @@ export type RegisterCommandsDeps = {
   exportService: ExportService;
   pendingActionService: PendingActionService;
   photoReviewService: PhotoReviewService;
+  digestService: DigestService;
 };
 
 export const registerCommands = (bot: Telegraf, deps: RegisterCommandsDeps): void => {
@@ -50,7 +52,7 @@ export const registerCommands = (bot: Telegraf, deps: RegisterCommandsDeps): voi
     deps.exportService,
     deps.photoReviewService
   );
-  registerAdminReportFlow(bot, deps.adminService, deps.reportService, deps.exportService);
+  registerAdminReportFlow(bot, deps.adminService, deps.reportService, deps.exportService, deps.digestService);
   registerAdminErrorsCommand(bot, deps.adminService);
   registerPhotoHandler(bot, deps.roleService, deps.pendingActionService);
   registerPendingActionHandlers(bot, deps.pendingActionService, deps.adminService);

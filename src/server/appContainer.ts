@@ -13,6 +13,7 @@ import { RoleService } from "../services/roleService";
 import { ExportService } from "../services/exportService";
 import { PendingActionService } from "../services/pendingActionService";
 import { PhotoReviewService } from "../services/photoReviewService";
+import { DigestService } from "../services/digestService";
 import { createBot } from "../bot/bot";
 import { logEvent } from "./logging/eventLog";
 
@@ -29,6 +30,7 @@ export interface AppContainer {
   exportService: ExportService;
   pendingActionService: PendingActionService;
   photoReviewService: PhotoReviewService;
+  digestService: DigestService;
 }
 
 const globalForApp = globalThis as unknown as {
@@ -86,6 +88,7 @@ export const getApp = async (): Promise<AppContainer> => {
       const roleService = new RoleService(adminService, employeeRepo, userSessionRepo);
       const exportService = new ExportService();
       const photoReviewService = new PhotoReviewService(shiftRepo);
+      const digestService = new DigestService(shiftRepo);
       const pendingActionService = new PendingActionService(
         employeeRepo,
         shiftRepo,
@@ -108,7 +111,8 @@ export const getApp = async (): Promise<AppContainer> => {
         userSessionRepo,
         exportService,
         pendingActionService,
-        photoReviewService
+        photoReviewService,
+        digestService
       });
 
       return {
@@ -123,7 +127,8 @@ export const getApp = async (): Promise<AppContainer> => {
         reportService,
         exportService,
         pendingActionService,
-        photoReviewService
+        photoReviewService,
+        digestService
       };
     })();
   }

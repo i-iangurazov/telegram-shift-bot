@@ -9,6 +9,7 @@ import { UserSessionRepository } from "../repositories/userSessionRepository";
 import { ExportService } from "../services/exportService";
 import { PendingActionService } from "../services/pendingActionService";
 import { PhotoReviewService } from "../services/photoReviewService";
+import { DigestService } from "../services/digestService";
 import { registerCommands } from "./registerCommands";
 import { applySafeTelegram } from "./safeTelegram";
 import { prisma } from "../db/prisma";
@@ -24,6 +25,7 @@ export const createBot = (deps: {
   exportService: ExportService;
   pendingActionService: PendingActionService;
   photoReviewService: PhotoReviewService;
+  digestService: DigestService;
 }): Telegraf => {
   const bot = new Telegraf(env.telegramBotToken);
   applySafeTelegram(bot.telegram);

@@ -2,8 +2,10 @@ import { Context, Telegraf } from "telegraf";
 import { AdminService } from "../../services/adminService";
 import { ReportService } from "../../services/reportService";
 import { ExportService } from "../../services/exportService";
+import { DigestService, parseDigestDateKey } from "../../services/digestService";
 import { adminGuard } from "../middleware/adminGuard";
 import { buildAllEmployeesReportMessage } from "../formatters/adminReportFormatter";
+import { buildDailyDigestMessage, buildWeeklyDigestMessage } from "../formatters/digestFormatter";
 import { buildAllExportKeyboard, buildAllPeriodKeyboard } from "../keyboards/adminReportKeyboards";
 import { messages } from "../messages";
 import { env } from "../../config/env";
@@ -17,6 +19,14 @@ import {
 const parsePeriodAllData = (data: string): string => {
   const parts = data.split(":");
   return parts[1] ?? "";
+};
+
+const parseCommandDateToken = (text: string): string | null => {
+  const parts = text.trim().split(/\s+/);
+  if (parts.length < 2) {
+    return null;
+  }
+  return parts[1] ?? null;
 };
 
 const mapLegacyDaysToPeriodKey = (days: number): ReportPeriodKey => {
@@ -55,7 +65,8 @@ export const registerAdminReportFlow = (
   bot: Telegraf,
   adminService: AdminService,
   reportService: ReportService,
-  exportService: ExportService
+  exportService: ExportService,
+  digestService: DigestService
 ): void => {
   const guard = adminGuard(adminService);
 
@@ -63,12 +74,91 @@ export const registerAdminReportFlow = (
     await ctx.reply(messages.reportAllPrompt, buildAllPeriodKeyboard());
   };
 
+  const sendDailyDigest = async (ctx: Context, selectedDate?: Date): Promise<void> => {
+    const report = await digestService.getDailyDigestReport({
+      timezone: env.timezone,
+      date: selectedDate
+    });
+    const message = buildDailyDigestMessage(report);
+    const chunks = splitMessage(message);
+    for (const chunk of chunks) {
+      await ctx.reply(chunk);
+    }
+  };
+
+  const sendWeeklyDigest = async (ctx: Context): Promise<void> => {
+    const report = await digestService.getWeeklyDigestReport({ timezone: env.timezone, days: 7 });
+    const message = buildWeeklyDigestMessage(report);
+    const chunks = splitMessage(message);
+    for (const chunk of chunks) {
+      await ctx.reply(chunk);
+    }
+  };
+
   bot.command("report", guard, async (ctx) => {
     await showPeriodSelection(ctx);
   });
 
+  bot.command("daily", guard, async (ctx) => {
+    try {
+      const text = "text" in ctx.message ? ctx.message.text : "";
+      const dateToken = parseCommandDateToken(text);
+      if (!dateToken) {
+        await sendDailyDigest(ctx);
+        return;
+      }
+
+      const parsedDate = parseDigestDateKey(dateToken, env.timezone);
+      if (!parsedDate) {
+        await ctx.reply("Неверная дата. Используйте формат YYYY-MM-DD.");
+        return;
+      }
+
+      await sendDailyDigest(ctx, parsedDate);
+    } catch (error) {
+      logger.error({ err: error }, "Failed to build daily digest command");
+      await ctx.reply("Не удалось сформировать дневной отчёт. Попробуйте позже.");
+    }
+  });
+
+  bot.command("weekly", guard, async (ctx) => {
+    try {
+      await sendWeeklyDigest(ctx);
+    } catch (error) {
+      logger.error({ err: error }, "Failed to build weekly digest command");
+      await ctx.reply("Не удалось сформировать еженедельный отчёт. Попробуйте позже.");
+    }
+  });
+
   bot.hears("Отчёт", guard, async (ctx) => {
     await showPeriodSelection(ctx);
+  });
+
+  bot.hears("Дневной отчёт", guard, async (ctx) => {
+    try {
+      await sendDailyDigest(ctx);
+    } catch (error) {
+      logger.error({ err: error }, "Failed to build daily digest");
+      await ctx.reply("Не удалось сформировать дневной отчёт. Попробуйте позже.");
+    }
+  });
+
+  bot.hears("Еженедельный отчёт", guard, async (ctx) => {
+    try {
+      await sendWeeklyDigest(ctx);
+    } catch (error) {
+      logger.error({ err: error }, "Failed to build weekly digest");
+      await ctx.reply("Не удалось сформировать еженедельный отчёт. Попробуйте позже.");
+    }
+  });
+
+  bot.hears("Настроить рассылку", guard, async (ctx) => {
+    await ctx.reply(
+      "Авторассылка запускается через GitHub Actions:\n" +
+      "- daily: .github/workflows/digest-daily.yml\n" +
+      "- weekly: .github/workflows/digest-weekly.yml\n" +
+      "Они вызывают POST /api/internal/digest?type=daily|weekly с INTERNAL_SECRET."
+    );
   });
 
   bot.action(/^period_all:/, guard, async (ctx) => {

@@ -1,6 +1,7 @@
 import { ClosedReason, EmployeeRoleOverride } from "@prisma/client";
 import { buildEmployeeListKeyboard, buildAllPeriodKeyboard, buildEmployeeReportPaginationKeyboard } from "../src/bot/keyboards/adminReportKeyboards";
 import { buildEmployeeReportMessage, buildAllEmployeesReportMessage } from "../src/bot/formatters/adminReportFormatter";
+import { adminKeyboard } from "../src/bot/keyboards/roleKeyboards";
 import { messages } from "../src/bot/messages";
 
 const sampleEmployee = {
@@ -36,6 +37,16 @@ describe("Admin flows UI", () => {
     expect(labels).toContain("Поиск");
     expect(labels).toContain("Назад");
     expect(labels).toContain("Иван Иванов");
+  });
+
+  it("admin keyboard includes digest buttons", () => {
+    const labels = adminKeyboard.reply_markup.keyboard.flat().map((button) => {
+      return typeof button === "string" ? button : button.text;
+    });
+
+    expect(labels).toContain("Дневной отчёт");
+    expect(labels).toContain("Еженедельный отчёт");
+    expect(labels).toContain("Настроить рассылку");
   });
 
   it("employees and report prompts are different", () => {
