@@ -156,6 +156,16 @@ export async function POST(
   try {
     const app = await getApp();
     await app.bot.handleUpdate(update);
+    await prisma.telegramUpdateQueue.updateMany({
+      where: {
+        updateId,
+        status: "pending"
+      },
+      data: {
+        status: "done",
+        lastError: null
+      }
+    });
   } catch (error) {
     try {
       const meta = extractUpdateMeta(update);
