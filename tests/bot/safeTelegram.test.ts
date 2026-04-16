@@ -1,4 +1,4 @@
-import { safeSendMessage } from "../../src/bot/safeTelegram";
+import { applySafeTelegram, safeSendMessage } from "../../src/bot/safeTelegram";
 import * as eventLog from "../../src/server/logging/eventLog";
 
 describe("safeTelegram", () => {
@@ -75,5 +75,17 @@ describe("safeTelegram", () => {
 
     expect(callApi).toHaveBeenCalledTimes(2);
     expect(result.ok).toBe(true);
+  });
+
+  it("does not wrap polling lifecycle methods", async () => {
+    const updates = [{ update_id: 1 }];
+    const callApi = jest.fn().mockResolvedValueOnce(updates);
+    const telegram = { callApi } as any;
+
+    applySafeTelegram(telegram);
+    const result = await telegram.callApi("getUpdates", {});
+
+    expect(result).toBe(updates);
+    expect(callApi).toHaveBeenCalledWith("getUpdates", {});
   });
 });

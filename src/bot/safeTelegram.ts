@@ -9,6 +9,12 @@ const NETWORK_ERROR_CODES = new Set(["ETIMEDOUT", "ECONNRESET", "EAI_AGAIN", "EN
 const RAW_CALL_API = Symbol.for("shiftbot.rawCallApi");
 const SAFE_APPLIED = Symbol.for("shiftbot.safeTelegramApplied");
 const SAFE_CALL_API = Symbol.for("shiftbot.safeTelegramCallApi");
+const SAFE_WRAPPED_METHODS = new Set([
+  "answerCallbackQuery",
+  "sendDocument",
+  "sendMessage",
+  "sendPhoto"
+]);
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -160,6 +166,10 @@ export const applySafeTelegram = (telegram: Telegram): void => {
   anyTelegram[RAW_CALL_API] = telegram.callApi.bind(telegram);
 
   const wrappedCall = async (method: string, payload: any) => {
+    if (!SAFE_WRAPPED_METHODS.has(method)) {
+      return anyTelegram[RAW_CALL_API](method, payload);
+    }
+
     const result = await safeTelegramCall({
       telegram,
       method,
