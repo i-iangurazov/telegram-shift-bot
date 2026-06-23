@@ -103,6 +103,8 @@ const buildShiftLabel = (params: {
   const when = formatShortDateTime(params.startTime, params.timezone);
   const reason = params.closedReason === "AUTO_TIMEOUT"
     ? "Авто12ч"
+    : params.closedReason === "AUTO_DAILY"
+      ? "АвтоДень"
     : params.closedReason === "USER_PHOTO"
       ? "Фото"
       : "Открыта";
@@ -440,6 +442,8 @@ export const registerAdminEmployeesFlow = (
       const duration = shift.durationMinutes != null ? formatDurationMinutes(shift.durationMinutes) : "—";
       const reason = shift.closedReason === "AUTO_TIMEOUT"
         ? "Автоматически (12 часов)"
+        : shift.closedReason === "AUTO_DAILY"
+          ? "Автоматически (день)"
         : shift.closedReason === "USER_PHOTO"
           ? "Фото"
           : "—";
@@ -471,7 +475,7 @@ export const registerAdminEmployeesFlow = (
         return;
       }
 
-      if (shift.closedReason === "AUTO_TIMEOUT") {
+      if (shift.closedReason === "AUTO_TIMEOUT" || shift.closedReason === "AUTO_DAILY") {
         await ctx.reply(messages.photoEndAutoClosed);
         return;
       }

@@ -3,16 +3,32 @@ import { env } from "../config/env";
 import { logger } from "../config/logger";
 import { getApp } from "../server/appContainer";
 import { runAutoCloseOnce } from "../jobs/tasks/autoCloseTask";
+import { runDailyAutoCloseOnce } from "../jobs/tasks/dailyAutoCloseTask";
 import { runPendingActionCleanupOnce } from "../jobs/tasks/pendingActionCleanupTask";
 import { runPhotoRetentionCleanupOnce } from "../jobs/tasks/photoRetentionTask";
+
+const runConfiguredAutoCloseOnce = async (
+  app: Awaited<ReturnType<typeof getApp>>,
+  now: Date
+): Promise<void> => {
+  if (env.botProfile === "start_only_daily_close") {
+    await runDailyAutoCloseOnce(app.shiftService, {
+      now,
+      limit: env.tickMaxAutoclose
+    });
+    return;
+  }
+
+  await runAutoCloseOnce(app.bot, app.shiftService, app.adminService, {
+    now,
+    limit: env.tickMaxAutoclose
+  });
+};
 
 const startPollingRunner = async (): Promise<void> => {
   const app = await getApp();
 
-  await runAutoCloseOnce(app.bot, app.shiftService, app.adminService, {
-    now: new Date(),
-    limit: env.tickMaxAutoclose
-  });
+  await runConfiguredAutoCloseOnce(app, new Date());
   await runPendingActionCleanupOnce(app.pendingActionService, {
     now: new Date(),
     limit: env.tickMaxExpirePending
@@ -26,10 +42,7 @@ const startPollingRunner = async (): Promise<void> => {
     env.overdueCheckCron,
     async () => {
       try {
-        await runAutoCloseOnce(app.bot, app.shiftService, app.adminService, {
-          now: new Date(),
-          limit: env.tickMaxAutoclose
-        });
+        await runConfiguredAutoCloseOnce(app, new Date());
       } catch (error) {
         logger.error({ err: error }, "Auto-close job failed");
       }

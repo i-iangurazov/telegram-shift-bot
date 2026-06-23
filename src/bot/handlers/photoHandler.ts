@@ -5,6 +5,7 @@ import { messages } from "../messages";
 import { logger } from "../../config/logger";
 import { PendingActionType } from "@prisma/client";
 import { buildPendingActionKeyboard } from "../keyboards/pendingActionKeyboards";
+import { env } from "../../config/env";
 
 export const registerPhotoHandler = (
   bot: Telegraf,
@@ -55,6 +56,11 @@ export const registerPhotoHandler = (
       });
 
       if (result.type === "duplicate") {
+        return;
+      }
+
+      if (result.type === "open_shift_exists") {
+        await ctx.reply(messages.dailyCloseShiftAlreadyOpen(env.dailyAutoCloseTime));
         return;
       }
 

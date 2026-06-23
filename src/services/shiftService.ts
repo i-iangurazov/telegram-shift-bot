@@ -3,6 +3,7 @@ import { EmployeeRepository } from "../repositories/employeeRepository";
 import { EmployeeRecord, ShiftRecord, ShiftWithRelations, TelegramUserInput } from "../domain/types";
 import { Logger } from "../utils/logger";
 import { Clock, systemClock } from "../server/clock";
+import { getDailyCloseEndTimeForShift, isDailyCloseDue } from "../utils/time";
 
 export type ShiftActionResult =
   | { type: "duplicate" }
@@ -19,6 +20,11 @@ export interface AutoCloseResult {
   shift: ShiftWithRelations;
   endTime: Date;
   durationMinutes: number;
+}
+
+export interface DailyAutoCloseConfig {
+  closeTime: string;
+  timezone: string;
 }
 
 export interface ShiftServiceConfig {
@@ -125,6 +131,33 @@ export class ShiftService {
       const endTime = new Date(shift.startTime.getTime() + maxShiftMs);
       const durationMinutes = this.config.maxShiftHours * 60;
       const updated = await this.shiftRepo.autoCloseShift(shift.id, endTime, durationMinutes, now);
+      if (updated) {
+        results.push({ shift: updated, endTime, durationMinutes });
+      }
+    }
+
+    return results;
+  }
+
+  async dailyAutoCloseOpenShifts(
+    config: DailyAutoCloseConfig,
+    now: Date = this.clock.now(),
+    limit?: number
+  ): Promise<AutoCloseResult[]> {
+    const openShifts = await this.shiftRepo.findOpenShifts(limit);
+    const results: AutoCloseResult[] = [];
+
+    for (const shift of openShifts) {
+      if (!isDailyCloseDue(shift.startTime, now, config.timezone, config.closeTime)) {
+        continue;
+      }
+
+      const endTime = getDailyCloseEndTimeForShift(shift.startTime, config.timezone, config.closeTime);
+      const durationMinutes = Math.max(
+        0,
+        Math.round((endTime.getTime() - shift.startTime.getTime()) / 60000)
+      );
+      const updated = await this.shiftRepo.dailyAutoCloseShift(shift.id, endTime, durationMinutes, now);
       if (updated) {
         results.push({ shift: updated, endTime, durationMinutes });
       }

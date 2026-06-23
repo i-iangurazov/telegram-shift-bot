@@ -40,6 +40,34 @@
 5. Настройте GitHub Actions для тикеров (см. ниже).
 6. В production не используйте polling (`bot.launch()`), только webhook + internal tick.
 
+## Три бота из одного репозитория
+Нужно создать три Telegram-бота в BotFather: текущий бот, новый бот с открытием смены и автозакрытием в 18:00, и новый бот-копию. У каждого будет свой `TELEGRAM_BOT_TOKEN`.
+
+Код не хранит три токена одновременно. Разделение делается через три отдельных Vercel-проекта или runtime-инстанса из этого же репозитория:
+
+- текущий бот: `TELEGRAM_BOT_TOKEN=<CURRENT_BOT_TOKEN>`, `BOT_PROFILE=standard`, своя БД;
+- бот открытия смены: `TELEGRAM_BOT_TOKEN=<START_ONLY_BOT_TOKEN>`, `BOT_PROFILE=start_only_daily_close`, своя БД;
+- бот-копия: `TELEGRAM_BOT_TOKEN=<COPY_BOT_TOKEN>`, `BOT_PROFILE=standard`, своя БД.
+
+Шаблоны env:
+- `deploy/env.current.example`
+- `deploy/env.start-only.example`
+- `deploy/env.copy.example`
+
+Локально можно создать реальные файлы:
+```bash
+cp deploy/env.current.example .env.current
+cp deploy/env.start-only.example .env.start-only
+cp deploy/env.copy.example .env.copy
+```
+
+После заполнения токенов, баз и URL вебхуки ставятся отдельно для каждого бота:
+```bash
+ENV_FILE=.env.current pnpm ts-node scripts/setWebhook.ts
+ENV_FILE=.env.start-only pnpm ts-node scripts/setWebhook.ts
+ENV_FILE=.env.copy pnpm ts-node scripts/setWebhook.ts
+```
+
 ## Docker
 ```bash
 docker compose up -d --build
@@ -55,7 +83,9 @@ docker compose up -d --build
 - `INTERNAL_SECRET` — секрет для internal tick endpoint.
 - `PUBLIC_BASE_URL` — публичный URL Vercel (например `https://project.vercel.app`).
 - `TELEGRAM_WEBHOOK_SECRET_TOKEN` — (опционально) секрет Telegram webhook header.
+- `BOT_PROFILE` — профиль бота: `standard` (по умолчанию) или `start_only_daily_close`.
 - `TIMEZONE` — часовой пояс (по умолчанию `Asia/Bishkek`).
+- `DAILY_AUTO_CLOSE_TIME` — локальное время ежедневного автозакрытия для `start_only_daily_close` (по умолчанию `18:00`).
 - `MAX_SHIFT_HOURS` — максимальная длительность смены в часах (по умолчанию 12).
 - `MIN_SHIFT_HOURS` — минимальная длительность смены в часах (по умолчанию 8).
 - `SHORT_SHIFT_GRACE_MINUTES` — допустимое отклонение в минутах (по умолчанию 0).
@@ -86,6 +116,7 @@ docker compose up -d --build
 - При подтверждении фото без открытой смены начинается новая смена.
 - Если подтверждение не выполнено за 10 минут, запрос истекает.
 - Если смена не закрыта в течение 12 часов, она закрывается автоматически ровно на `startTime + 12h` с нарушением.
+- При `BOT_PROFILE=start_only_daily_close` фото только открывает смену; открытые смены закрываются автоматически в `DAILY_AUTO_CLOSE_TIME` по `TIMEZONE` без нарушения `NOT_CLOSED_IN_TIME`.
 - При закрытии смены длительностью меньше `MIN_SHIFT_HOURS` фиксируется нарушение `SHORT_SHIFT` (с учётом `SHORT_SHIFT_GRACE_MINUTES`).
 - Ссылки на фото хранятся 3 дня, затем очищаются; смены остаются в базе.
 - Для защиты от повторной обработки сохраняется `message_id` вместе с `chat_id`.
@@ -116,6 +147,13 @@ docker compose up -d --build
 ```bash
 pnpm ts-node scripts/setWebhook.ts
 pnpm ts-node scripts/deleteWebhook.ts
+```
+
+Для нескольких деплоев из одного репозитория можно использовать разные env-файлы локально:
+```bash
+ENV_FILE=.env.main pnpm ts-node scripts/setWebhook.ts
+ENV_FILE=.env.start-only pnpm ts-node scripts/setWebhook.ts
+ENV_FILE=.env.copy pnpm ts-node scripts/setWebhook.ts
 ```
 
 ## Роли и режимы

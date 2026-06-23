@@ -1,0 +1,1 @@
+ALTER TYPE "ClosedReason" ADD VALUE 'AUTO_DAILY';

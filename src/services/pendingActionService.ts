@@ -4,6 +4,7 @@ import { ShiftRepository } from "../repositories/shiftRepository";
 import { PendingActionRepository } from "../repositories/pendingActionRepository";
 import { EmployeeRecord, PendingActionRecord, ShiftRecord, ShiftWithRelations } from "../domain/types";
 import { Clock, systemClock } from "../server/clock";
+import { getDailyCloseEndTimeForShift, isDailyCloseDue } from "../utils/time";
 
 type DbClient = Prisma.TransactionClient;
 type TransactionRunner = <T>(fn: (tx?: DbClient) => Promise<T>) => Promise<T>;
@@ -13,10 +14,16 @@ export interface PendingActionConfig {
   maxShiftHours: number;
   minShiftMinutes: number;
   shortShiftGraceMinutes: number;
+  profile?: "standard" | "start_only_daily_close";
+  dailyAutoClose?: {
+    closeTime: string;
+    timezone: string;
+  };
 }
 
 export type PendingActionCreateResult =
   | { type: "duplicate" }
+  | { type: "open_shift_exists"; employee: EmployeeRecord }
   | { type: "pending"; pendingAction: PendingActionRecord; actionType: PendingActionType; employee: EmployeeRecord };
 
 export type PendingActionConfirmResult =
@@ -72,9 +79,17 @@ export class PendingActionService {
     const employee = await this.employeeRepo.upsertFromTelegram(params.user);
     const openShift = await this.shiftRepo.findOpenShift(employee.id);
 
+    if (this.isStartOnlyDailyClose() && openShift) {
+      if (!this.isDailyCloseDue(openShift, params.messageDate)) {
+        return { type: "open_shift_exists", employee };
+      }
+    }
+
     const maxShiftMs = this.config.maxShiftHours * 60 * 60 * 1000;
     const isOverdue = openShift
-      ? params.messageDate.getTime() >= openShift.startTime.getTime() + maxShiftMs
+      ? this.isStartOnlyDailyClose()
+        ? this.isDailyCloseDue(openShift, params.messageDate)
+        : params.messageDate.getTime() >= openShift.startTime.getTime() + maxShiftMs
       : false;
     const actionType = !openShift || isOverdue ? PendingActionType.START : PendingActionType.END;
 
@@ -140,15 +155,24 @@ export class PendingActionService {
         const openShift = await this.shiftRepo.findOpenShift(employee.id, tx);
         let autoClosed: ShiftWithRelations | null = null;
         if (openShift) {
-          const overdue = messageTime.getTime() >= openShift.startTime.getTime() + maxShiftMs;
+          const overdue = this.isStartOnlyDailyClose()
+            ? this.isDailyCloseDue(openShift, messageTime)
+            : messageTime.getTime() >= openShift.startTime.getTime() + maxShiftMs;
           if (!overdue) {
             await this.pendingRepo.updateStatus(pending.id, PendingActionStatus.CANCELLED, now, tx);
             return { type: "open_shift_exists" };
           }
 
-          const endTime = new Date(openShift.startTime.getTime() + maxShiftMs);
-          const durationMinutes = this.config.maxShiftHours * 60;
-          autoClosed = await this.shiftRepo.autoCloseShift(openShift.id, endTime, durationMinutes, now, tx);
+          if (this.isStartOnlyDailyClose()) {
+            const endTime = this.getDailyCloseEndTime(openShift);
+            const durationMinutes = this.calculateDurationMinutes(openShift.startTime, endTime);
+            autoClosed = await this.shiftRepo.dailyAutoCloseShift(openShift.id, endTime, durationMinutes, now, tx);
+          } else {
+            const endTime = new Date(openShift.startTime.getTime() + maxShiftMs);
+            const durationMinutes = this.config.maxShiftHours * 60;
+            autoClosed = await this.shiftRepo.autoCloseShift(openShift.id, endTime, durationMinutes, now, tx);
+          }
+
           if (!autoClosed) {
             await this.pendingRepo.updateStatus(pending.id, PendingActionStatus.CANCELLED, now, tx);
             return { type: "open_shift_exists" };
@@ -166,7 +190,17 @@ export class PendingActionService {
           tx
         );
 
-        return { type: "confirmed_start", shift, employee, autoClose: autoClosed };
+        return {
+          type: "confirmed_start",
+          shift,
+          employee,
+          autoClose: this.isStartOnlyDailyClose() ? null : autoClosed
+        };
+      }
+
+      if (this.isStartOnlyDailyClose()) {
+        await this.pendingRepo.updateStatus(pending.id, PendingActionStatus.CANCELLED, now, tx);
+        return { type: "open_shift_exists" };
       }
 
       const openShift = await this.shiftRepo.findOpenShift(employee.id, tx);
@@ -250,5 +284,30 @@ export class PendingActionService {
 
   async hasActivePendingAction(telegramUserId: string, now: Date = this.clock.now()): Promise<boolean> {
     return this.pendingRepo.hasActiveForUser(telegramUserId, now);
+  }
+
+  private isStartOnlyDailyClose(): boolean {
+    return this.config.profile === "start_only_daily_close";
+  }
+
+  private getDailyAutoCloseConfig(): { closeTime: string; timezone: string } {
+    if (!this.config.dailyAutoClose) {
+      throw new Error("dailyAutoClose config is required for start_only_daily_close profile");
+    }
+    return this.config.dailyAutoClose;
+  }
+
+  private isDailyCloseDue(shift: ShiftRecord, now: Date): boolean {
+    const config = this.getDailyAutoCloseConfig();
+    return isDailyCloseDue(shift.startTime, now, config.timezone, config.closeTime);
+  }
+
+  private getDailyCloseEndTime(shift: ShiftRecord): Date {
+    const config = this.getDailyAutoCloseConfig();
+    return getDailyCloseEndTimeForShift(shift.startTime, config.timezone, config.closeTime);
+  }
+
+  private calculateDurationMinutes(startTime: Date, endTime: Date): number {
+    return Math.max(0, Math.round((endTime.getTime() - startTime.getTime()) / 60000));
   }
 }

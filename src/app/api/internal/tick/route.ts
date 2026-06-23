@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { env } from "../../../../config/env";
 import { getApp } from "../../../../server/appContainer";
 import { runAutoCloseOnce } from "../../../../jobs/tasks/autoCloseTask";
+import { runDailyAutoCloseOnce } from "../../../../jobs/tasks/dailyAutoCloseTask";
 import { runPendingActionCleanupOnce } from "../../../../jobs/tasks/pendingActionCleanupTask";
 import { runPhotoRetentionCleanupOnce } from "../../../../jobs/tasks/photoRetentionTask";
 import { runProcessUpdateQueueOnce } from "../../../../jobs/tasks/processUpdateQueueTask";
@@ -116,10 +117,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         now: ranAt,
         limit: env.tickMaxExpirePending
       });
-      autoCloseSummary = await runAutoCloseOnce(app.bot, app.shiftService, app.adminService, {
-        now: ranAt,
-        limit: env.tickMaxAutoclose
-      });
+      if (env.botProfile === "start_only_daily_close") {
+        autoCloseSummary = {
+          ...(await runDailyAutoCloseOnce(app.shiftService, {
+            now: ranAt,
+            limit: env.tickMaxAutoclose
+          })),
+          notifiedAdmins: 0,
+          notifiedEmployees: 0
+        };
+      } else {
+        autoCloseSummary = await runAutoCloseOnce(app.bot, app.shiftService, app.adminService, {
+          now: ranAt,
+          limit: env.tickMaxAutoclose
+        });
+      }
     }
 
     if (mode === "regular") {

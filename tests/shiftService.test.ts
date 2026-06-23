@@ -1,4 +1,4 @@
-import { ViolationType } from "@prisma/client";
+import { ClosedReason, ViolationType } from "@prisma/client";
 import { ShiftService } from "../src/services/shiftService";
 import { InMemoryDatabase, InMemoryEmployeeRepository, InMemoryShiftRepository } from "./helpers/inMemoryDb";
 
@@ -168,5 +168,51 @@ describe("ShiftService", () => {
     const secondRun = await service.autoCloseOverdueShifts(now);
     expect(secondRun).toHaveLength(0);
     expect(db.violations).toHaveLength(1);
+  });
+
+  it("daily auto-closes open shifts at configured local time without violation", async () => {
+    const db = new InMemoryDatabase();
+    const employeeRepo = new InMemoryEmployeeRepository(db);
+    const shiftRepo = new InMemoryShiftRepository(db);
+    const service = new ShiftService(
+      employeeRepo,
+      shiftRepo,
+      { maxShiftHours: 12, minShiftMinutes: 480, shortShiftGraceMinutes: 0 },
+      logger
+    );
+
+    const employee = await employeeRepo.upsertFromTelegram({
+      id: 104,
+      username: "user4",
+      firstName: "Нурлан",
+      lastName: "Тест",
+      chatId: 104
+    });
+
+    await shiftRepo.createShiftStart({
+      employeeId: employee.id,
+      startTime: new Date("2024-01-01T03:00:00Z"),
+      startPhotoFileId: "file-start",
+      startMessageId: 101,
+      startChatId: "104"
+    });
+
+    const firstRun = await service.dailyAutoCloseOpenShifts(
+      { closeTime: "18:00", timezone: "Asia/Bishkek" },
+      new Date("2024-01-01T12:05:00Z")
+    );
+
+    expect(firstRun).toHaveLength(1);
+    expect(firstRun[0].endTime.toISOString()).toBe("2024-01-01T12:00:00.000Z");
+    expect(firstRun[0].durationMinutes).toBe(540);
+    expect(db.shifts[0].closedReason).toBe(ClosedReason.AUTO_DAILY);
+    expect(db.violations).toHaveLength(0);
+
+    const secondRun = await service.dailyAutoCloseOpenShifts(
+      { closeTime: "18:00", timezone: "Asia/Bishkek" },
+      new Date("2024-01-01T12:10:00Z")
+    );
+
+    expect(secondRun).toHaveLength(0);
   });
 });

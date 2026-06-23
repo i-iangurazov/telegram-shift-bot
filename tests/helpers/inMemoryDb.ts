@@ -311,6 +311,14 @@ export class InMemoryShiftRepository implements ShiftRepository {
     return limited.map((shift) => this.attachRelations(shift));
   }
 
+  async findOpenShifts(take?: number): Promise<ShiftWithRelations[]> {
+    const matches = this.db.shifts
+      .filter((shift) => shift.endTime === null)
+      .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+    const limited = take ? matches.slice(0, take) : matches;
+    return limited.map((shift) => this.attachRelations(shift));
+  }
+
   async autoCloseShift(
     shiftId: number,
     endTime: Date,
@@ -341,6 +349,26 @@ export class InMemoryShiftRepository implements ShiftRepository {
         createdAt: now
       });
     }
+
+    return this.attachRelations(shift);
+  }
+
+  async dailyAutoCloseShift(
+    shiftId: number,
+    endTime: Date,
+    durationMinutes: number,
+    now: Date,
+    _tx?: unknown
+  ): Promise<ShiftWithRelations | null> {
+    const shift = this.db.shifts.find((item) => item.id === shiftId);
+    if (!shift || shift.endTime !== null) {
+      return null;
+    }
+
+    shift.endTime = endTime;
+    shift.closedReason = ClosedReason.AUTO_DAILY;
+    shift.durationMinutes = durationMinutes;
+    shift.autoClosedAt = now;
 
     return this.attachRelations(shift);
   }

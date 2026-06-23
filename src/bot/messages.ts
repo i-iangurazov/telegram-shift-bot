@@ -39,6 +39,8 @@ export const messages = {
   notEmployee: "Вы не сотрудник. Переключите режим или добавьте себя как сотрудника.",
   confirmStartPrompt: "Подтвердите начало смены?",
   confirmEndPrompt: "Подтвердите закрытие смены?",
+  dailyCloseShiftAlreadyOpen: (time: string) =>
+    `Смена уже открыта. Закрытие произойдёт автоматически в ${time}.`,
   pendingCancelled: "Отменено. Фото не сохранено в смене.",
   pendingExpired: "Время подтверждения истекло. Отправьте фото заново.",
   pendingAlreadyHandled: "Действие уже обработано.",

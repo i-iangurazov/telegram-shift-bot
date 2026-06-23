@@ -10,6 +10,9 @@ export const formatClosedReason = (reason: ClosedReason | null): string => {
   if (reason === ClosedReason.AUTO_TIMEOUT) {
     return "AUTO_TIMEOUT";
   }
+  if (reason === ClosedReason.AUTO_DAILY) {
+    return "AUTO_DAILY";
+  }
   if (reason === ClosedReason.USER_PHOTO) {
     return "USER_PHOTO";
   }

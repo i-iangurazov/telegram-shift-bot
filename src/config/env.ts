@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 import { z } from "zod";
 
 if (process.env.NODE_ENV !== "production") {
-  dotenv.config();
+  dotenv.config(process.env.ENV_FILE ? { path: process.env.ENV_FILE } : undefined);
 }
 
 const boolFromEnv = z.preprocess((value) => {
@@ -27,7 +27,9 @@ const envSchema = z.object({
   INTERNAL_SECRET: z.string().min(1),
   PUBLIC_BASE_URL: z.string().min(1),
   TELEGRAM_WEBHOOK_SECRET_TOKEN: z.string().optional(),
+  BOT_PROFILE: z.enum(["standard", "start_only_daily_close"]).default("standard"),
   TIMEZONE: z.string().default("Asia/Bishkek"),
+  DAILY_AUTO_CLOSE_TIME: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default("18:00"),
   MAX_SHIFT_HOURS: z.coerce.number().int().positive().default(12),
   MIN_SHIFT_HOURS: z.coerce.number().int().positive().default(8),
   SHORT_SHIFT_GRACE_MINUTES: z.coerce.number().int().min(0).default(0),
@@ -65,7 +67,9 @@ export const env = {
   internalSecret: parsed.data.INTERNAL_SECRET,
   publicBaseUrl: parsed.data.PUBLIC_BASE_URL,
   telegramWebhookSecretToken: parsed.data.TELEGRAM_WEBHOOK_SECRET_TOKEN ?? null,
+  botProfile: parsed.data.BOT_PROFILE,
   timezone: parsed.data.TIMEZONE,
+  dailyAutoCloseTime: parsed.data.DAILY_AUTO_CLOSE_TIME,
   maxShiftHours: parsed.data.MAX_SHIFT_HOURS,
   minShiftHours: parsed.data.MIN_SHIFT_HOURS,
   shortShiftGraceMinutes: parsed.data.SHORT_SHIFT_GRACE_MINUTES,

@@ -139,6 +139,7 @@ model TelegramUpdateQueue {
 enum ClosedReason {
   USER_PHOTO
   AUTO_TIMEOUT
+  AUTO_DAILY
 }
 
 enum ViolationType {

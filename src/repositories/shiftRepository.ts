@@ -24,8 +24,10 @@ export interface ShiftRepository {
     durationMinutes: number;
   }, tx?: DbClient): Promise<ShiftRecord>;
   createViolation(shiftId: number, type: ViolationType, tx?: DbClient): Promise<void>;
+  findOpenShifts(take?: number): Promise<ShiftWithRelations[]>;
   findOverdueShifts(cutoff: Date, take?: number): Promise<ShiftWithRelations[]>;
   autoCloseShift(shiftId: number, endTime: Date, durationMinutes: number, now: Date, tx?: DbClient): Promise<ShiftWithRelations | null>;
+  dailyAutoCloseShift(shiftId: number, endTime: Date, durationMinutes: number, now: Date, tx?: DbClient): Promise<ShiftWithRelations | null>;
   findShiftsInRange(from: Date, to: Date, options?: { limit?: number; order?: "asc" | "desc" }): Promise<ShiftWithRelations[]>;
   findEmployeeShiftsInRange(
     employeeId: number,
@@ -142,6 +144,15 @@ export class PrismaShiftRepository implements ShiftRepository {
     });
   }
 
+  async findOpenShifts(take?: number): Promise<ShiftWithRelations[]> {
+    return prisma.shift.findMany({
+      where: { endTime: null },
+      include: { employee: true, violations: true },
+      orderBy: { startTime: "asc" },
+      take
+    });
+  }
+
   async findOverdueShifts(cutoff: Date, take?: number): Promise<ShiftWithRelations[]> {
     return prisma.shift.findMany({
       where: { endTime: null, alertedAt: null, startTime: { lte: cutoff } },
@@ -210,6 +221,34 @@ export class PrismaShiftRepository implements ShiftRepository {
         where: { id: shiftId },
         include: { employee: true, violations: true }
       });
+    });
+  }
+
+  async dailyAutoCloseShift(
+    shiftId: number,
+    endTime: Date,
+    durationMinutes: number,
+    now: Date,
+    tx?: DbClient
+  ): Promise<ShiftWithRelations | null> {
+    const client = tx ?? prisma;
+    const updated = await client.shift.updateMany({
+      where: { id: shiftId, endTime: null },
+      data: {
+        endTime,
+        closedReason: ClosedReason.AUTO_DAILY,
+        durationMinutes,
+        autoClosedAt: now
+      }
+    });
+
+    if (updated.count === 0) {
+      return null;
+    }
+
+    return client.shift.findUnique({
+      where: { id: shiftId },
+      include: { employee: true, violations: true }
     });
   }
 

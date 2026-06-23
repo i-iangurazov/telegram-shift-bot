@@ -95,7 +95,12 @@ const buildApp = async (): Promise<AppContainer> => {
       ttlMinutes: env.pendingActionTtlMinutes,
       maxShiftHours: env.maxShiftHours,
       minShiftMinutes: env.minShiftHours * 60,
-      shortShiftGraceMinutes: env.shortShiftGraceMinutes
+      shortShiftGraceMinutes: env.shortShiftGraceMinutes,
+      profile: env.botProfile,
+      dailyAutoClose: {
+        closeTime: env.dailyAutoCloseTime,
+        timezone: env.timezone
+      }
     },
     async (fn) => prisma.$transaction(async (tx) => fn(tx))
   );

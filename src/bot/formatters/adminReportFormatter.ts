@@ -9,6 +9,9 @@ const mapClosedReason = (reason: ClosedReason | null): string => {
   if (reason === ClosedReason.AUTO_TIMEOUT) {
     return "Автоматически (12 часов)";
   }
+  if (reason === ClosedReason.AUTO_DAILY) {
+    return "Автоматически (день)";
+  }
   if (reason === ClosedReason.USER_PHOTO) {
     return "Фото";
   }
