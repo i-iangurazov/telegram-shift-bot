@@ -135,9 +135,9 @@ docker compose up -d --build
 
 Файлы воркфлоу:
 - `.github/workflows/tick-regular.yml` — каждые 30 минут.
-- `.github/workflows/tick-queue.yml` — каждые 5 минут (обработка очереди обновлений).
+- `.github/workflows/tick-queue.yml` — каждый час на 15-й минуте (резервная обработка очереди обновлений).
 - `.github/workflows/tick-daily.yml` — каждый день в 03:05.
-- `.github/workflows/warmup-morning.yml` — прогрев в пиковое время 08:00–09:59 по Бишкеку (UTC+6).
+- `.github/workflows/warmup-morning.yml` — прогрев в 08:00 и 09:00 по Бишкеку (UTC+6).
 
 ## Надёжность
 - Отправка сообщений в Telegram имеет ретраи на 429/5xx/сетевые сбои.
