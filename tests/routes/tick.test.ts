@@ -29,6 +29,24 @@ test("rejects missing internal secret", async () => {
   expect(res.status).toBe(401);
 });
 
+test("skips regular tick before db work on disabled production hosts", async () => {
+  const { POST } = await import("../../src/app/api/internal/tick/route");
+  const req = buildRequest("https://project-iu5l5.vercel.app/api/internal/tick", {
+    Authorization: "Bearer test-internal"
+  });
+
+  const res = await POST(req);
+  expect(res.status).toBe(200);
+
+  const body = await res.json();
+  expect(body).toMatchObject({
+    ok: true,
+    mode: "regular",
+    skipped: true,
+    reason: "regular_tick_disabled_for_host"
+  });
+});
+
 test("queue mode processes pending updates", async () => {
   const { POST } = await import("../../src/app/api/internal/tick/route");
   const { getApp } = await import("../../src/server/appContainer");

@@ -19,6 +19,17 @@ const isAuthorized = (req: NextRequest): boolean => {
   return bearer === env.internalSecret || headerSecret === env.internalSecret;
 };
 
+const regularTickDisabledHosts = new Set(["project-iu5l5.vercel.app", "project-7wkhn.vercel.app"]);
+
+const getRequestHost = (req: NextRequest): string => {
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? req.nextUrl.host;
+  return host.split(":")[0]?.toLowerCase() ?? "";
+};
+
+const shouldSkipDbBackedRegularTick = (req: NextRequest, mode: string): boolean => {
+  return mode === "regular" && regularTickDisabledHosts.has(getRequestHost(req));
+};
+
 const monitorQueueBacklog = async (params: {
   prisma: Awaited<ReturnType<typeof getApp>>["prisma"];
   bot: Awaited<ReturnType<typeof getApp>>["bot"];
@@ -94,6 +105,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const modeParam = req.nextUrl.searchParams.get("mode");
   const mode = modeParam === "daily" ? "daily" : modeParam === "queue" ? "queue" : "regular";
   const ranAt = new Date();
+
+  if (shouldSkipDbBackedRegularTick(req, mode)) {
+    return NextResponse.json({
+      ok: true,
+      mode,
+      skipped: true,
+      reason: "regular_tick_disabled_for_host",
+      ranAt: ranAt.toISOString()
+    });
+  }
 
   let app: Awaited<ReturnType<typeof getApp>> | null = null;
 
