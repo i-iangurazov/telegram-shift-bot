@@ -1,3 +1,4 @@
+import * as xlsxTransport from "../../src/bot/xlsxTransport";
 import { Telegraf, Telegram } from "telegraf";
 
 type TelegramCall = { method: string; payload: any };
@@ -43,6 +44,10 @@ const resetCalls = () => {
 export const attachFakeTelegram = (bot?: Telegraf) => {
   ensurePatched();
   resetCalls();
+  jest.spyOn(xlsxTransport, "sendXlsxDocument").mockImplementation(async (_token, payload) => {
+    globalStore.__telegramCalls?.push({ method: "sendDocument", payload });
+    return { message_id: 1 };
+  });
 
   if (bot?.telegram) {
     (bot.telegram as any).callApi = Telegram.prototype.callApi.bind(bot.telegram);

@@ -4,7 +4,7 @@ import { AdminService } from "../../services/adminService";
 import { env } from "../../config/env";
 import { messages } from "../messages";
 import { formatDurationMinutes } from "../../utils/format";
-import { formatTime } from "../../utils/time";
+import { formatDateTime } from "../../utils/time";
 import { logger } from "../../config/logger";
 import { safeSendMessage } from "../utils/safeSendMessage";
 
@@ -35,7 +35,7 @@ export const registerPendingActionHandlers = (
 
       if (result.type === "confirmed_start") {
         if (result.autoClose) {
-          const endTime = formatTime(result.autoClose.endTime ?? new Date(), env.timezone);
+          const endTime = formatDateTime(result.autoClose.endTime ?? new Date(), env.timezone);
           const bossAutoMessage = messages.autoClosedBoss(result.employee.displayName, endTime, env.maxShiftHours);
 
           for (const adminChatId of adminChatIds) {
@@ -51,7 +51,7 @@ export const registerPendingActionHandlers = (
           }
         }
 
-        const time = formatTime(result.shift.startTime, env.timezone);
+        const time = formatDateTime(result.shift.startTime, env.timezone);
         await ctx.reply(messages.shiftStarted(time));
 
         const bossMessage = messages.bossShiftStarted(result.employee.displayName, time);
@@ -63,7 +63,7 @@ export const registerPendingActionHandlers = (
       }
 
       if (result.type === "confirmed_end") {
-        const time = formatTime(result.shift.endTime ?? new Date(), env.timezone);
+        const time = formatDateTime(result.shift.endTime ?? new Date(), env.timezone);
         const duration = formatDurationMinutes(result.durationMinutes);
         await ctx.reply(messages.shiftClosed(time, duration));
 
@@ -76,7 +76,7 @@ export const registerPendingActionHandlers = (
       }
 
       if (result.type === "auto_closed") {
-        const endTime = formatTime(result.autoClose.endTime ?? new Date(), env.timezone);
+        const endTime = formatDateTime(result.autoClose.endTime ?? new Date(), env.timezone);
         const bossMessage = messages.autoClosedBoss(
           result.autoClose.employee.displayName,
           endTime,

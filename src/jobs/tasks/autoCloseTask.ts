@@ -3,7 +3,7 @@ import { ShiftService } from "../../services/shiftService";
 import { AdminService } from "../../services/adminService";
 import { env } from "../../config/env";
 import { messages } from "../../bot/messages";
-import { formatTime } from "../../utils/time";
+import { formatDateTime } from "../../utils/time";
 import { safeSendMessage } from "../../bot/utils/safeSendMessage";
 import { Clock, systemClock } from "../../server/clock";
 
@@ -30,7 +30,7 @@ export const runAutoCloseOnce = async (
   let notifiedEmployees = 0;
 
   for (const result of results) {
-    const endTime = formatTime(result.endTime, env.timezone);
+    const endTime = formatDateTime(result.endTime, env.timezone);
     const employeeName = result.shift.employee.displayName;
 
     const bossMessage = messages.autoClosedBoss(employeeName, endTime, env.maxShiftHours);

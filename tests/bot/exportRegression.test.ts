@@ -6,7 +6,7 @@ import { makeCallbackUpdate } from "../helpers/makeUpdate";
 import { resetDb, disconnectDb } from "../helpers/createTestDb";
 import { XLSX_MIME } from "../../src/services/exportService";
 import { sendXlsxDocument } from "../../src/bot/xlsxTransport";
-beforeEach(resetDb); afterAll(disconnectDb);
+beforeEach(resetDb); afterEach(() => jest.restoreAllMocks()); afterAll(disconnectDb);
 
 test("all current and legacy export callbacks deliver real XLSX", async () => {
   const d = buildDeps(); await d.prisma.admin.create({ data: { telegramUserId: "777" } });
@@ -27,5 +27,5 @@ test("multipart upload carries XLSX content type and Cyrillic filename", async (
     expect(file.type).toBe(XLSX_MIME); expect(file.name).toBe("Отчёт.xlsx");
     return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }), { status: 200 });
   });
-  try { await sendXlsxDocument("test-token", { chat_id: 1, document: { source: Buffer.from("test"), filename: "Отчёт.xlsx" } }); } finally { fetchMock.mockRestore(); }
+  try { await sendXlsxDocument("test-token", { chat_id: 1, document: { source: Buffer.from("test"), filename: "Отчёт.xlsx" } }); expect(fetchMock).toHaveBeenCalledTimes(1); } finally { fetchMock.mockRestore(); }
 });

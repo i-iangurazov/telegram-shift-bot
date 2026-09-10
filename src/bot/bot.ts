@@ -29,6 +29,11 @@ export const createBot = (deps: {
 }): Telegraf => {
   const bot = new Telegraf(env.telegramBotToken);
   applySafeTelegram(bot.telegram);
+  // Telegraf creates a fresh Telegram instance for each update context.
+  bot.use(async (ctx, next) => {
+    applySafeTelegram(ctx.telegram);
+    return next();
+  });
 
   registerCommands(bot, deps);
 
