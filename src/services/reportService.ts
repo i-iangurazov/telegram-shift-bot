@@ -11,6 +11,11 @@ export interface PeriodRange {
 type RangeInput = number | { from: Date; to: Date; days?: number };
 
 export interface EmployeeShiftRow {
+  id?: number;
+  startChatId?: string;
+  startMessageId?: number;
+  endChatId?: string | null;
+  endMessageId?: number | null;
   startTime: Date;
   endTime: Date | null;
   durationMinutes: number | null;
@@ -131,6 +136,7 @@ export class ReportService {
       : [];
 
     const shiftRows: EmployeeShiftRow[] = shifts.map((shift) => ({
+      id: shift.id, startChatId: shift.startChatId, startMessageId: shift.startMessageId, endChatId: shift.endChatId, endMessageId: shift.endMessageId,
       startTime: shift.startTime,
       endTime: shift.endTime,
       durationMinutes: shift.durationMinutes,
@@ -270,8 +276,9 @@ export class ReportService {
     now: Date = new Date()
   ): Promise<EmployeeShiftRow[]> {
     const period = this.normalizeRange(rangeOrDays, now);
-    const shifts = await this.shiftRepo.findEmployeeShiftsInRange(employeeId, period.from, period.to, { limit: 10000 });
+    const shifts = await this.shiftRepo.findEmployeeShiftsInRange(employeeId, period.from, period.to, {});
     return shifts.map((shift) => ({
+      id: shift.id, startChatId: shift.startChatId, startMessageId: shift.startMessageId, endChatId: shift.endChatId, endMessageId: shift.endMessageId,
       startTime: shift.startTime,
       endTime: shift.endTime,
       durationMinutes: shift.durationMinutes,
@@ -282,57 +289,12 @@ export class ReportService {
     }));
   }
 
-  async getRawShiftsForExport(days: number, now?: Date, limit?: number): Promise<{
+  async getRawShiftsForExport(rangeOrDays: RangeInput, now: Date = new Date()): Promise<{
     period: PeriodRange;
-    shifts: Array<{
-      employeeId: number;
-      telegramUserId: string;
-      displayName: string;
-      startTime: Date;
-      endTime: Date | null;
-      durationMinutes: number | null;
-      closedReason: ClosedReason | null;
-      violations: ViolationType[];
-    }>;
-  }>;
-  async getRawShiftsForExport(
-    range: { from: Date; to: Date; days?: number },
-    limit?: number
-  ): Promise<{
-    period: PeriodRange;
-    shifts: Array<{
-      employeeId: number;
-      telegramUserId: string;
-      displayName: string;
-      startTime: Date;
-      endTime: Date | null;
-      durationMinutes: number | null;
-      closedReason: ClosedReason | null;
-      violations: ViolationType[];
-    }>;
-  }>;
-  async getRawShiftsForExport(
-    rangeOrDays: RangeInput,
-    nowOrLimit: Date | number = new Date(),
-    maybeLimit = 5000
-  ): Promise<{
-    period: PeriodRange;
-    shifts: Array<{
-      employeeId: number;
-      telegramUserId: string;
-      displayName: string;
-      startTime: Date;
-      endTime: Date | null;
-      durationMinutes: number | null;
-      closedReason: ClosedReason | null;
-      violations: ViolationType[];
-    }>;
+    shifts: Array<EmployeeShiftRow & { employeeId: number; telegramUserId: string; displayName: string }>;
   }> {
-    const now = nowOrLimit instanceof Date ? nowOrLimit : new Date();
-    const limit = typeof nowOrLimit === "number" ? nowOrLimit : maybeLimit;
     const period = this.normalizeRange(rangeOrDays, now);
     const shifts = await this.shiftRepo.findShiftsInRange(period.from, period.to, {
-      limit,
       order: "asc"
     });
     return {
@@ -341,6 +303,7 @@ export class ReportService {
         employeeId: shift.employeeId,
         telegramUserId: shift.employee.telegramUserId,
         displayName: shift.employee.displayName,
+        id: shift.id, startChatId: shift.startChatId, startMessageId: shift.startMessageId, endChatId: shift.endChatId, endMessageId: shift.endMessageId,
         startTime: shift.startTime,
         endTime: shift.endTime,
         durationMinutes: shift.durationMinutes,

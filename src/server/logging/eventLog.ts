@@ -1,3 +1,4 @@
+import { redactSecrets } from "../../utils/redact";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { createHash } from "crypto";
 import { env } from "../../config/env";
@@ -40,6 +41,7 @@ const truncate = (value: string | undefined, max: number): string | undefined =>
   if (!value) {
     return undefined;
   }
+  value = redactSecrets(value);
   if (value.length <= max) {
     return value;
   }

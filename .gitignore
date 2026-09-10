@@ -7,3 +7,6 @@ prisma/dev.db-journal
 coverage
 dist
 .vercel
+.local/
+.next/
+*.tsbuildinfo

@@ -441,9 +441,9 @@ export const registerAdminEmployeesFlow = (
       const endTime = shift.endTime ? formatDateTime(shift.endTime, env.timezone) : "Открыта";
       const duration = shift.durationMinutes != null ? formatDurationMinutes(shift.durationMinutes) : "—";
       const reason = shift.closedReason === "AUTO_TIMEOUT"
-        ? "Автоматически (12 часов)"
+        ? "Автоматически по лимиту"
         : shift.closedReason === "AUTO_DAILY"
-          ? "Автоматически (день)"
+          ? "Ежедневное автозакрытие"
         : shift.closedReason === "USER_PHOTO"
           ? "Фото"
           : "—";
@@ -496,7 +496,7 @@ export const registerAdminEmployeesFlow = (
     const employeeId = Number(parts[3] ?? "0");
     const period = resolvePeriodToken(periodToken);
 
-    if (format !== "csv" || !period || !employeeId) {
+    if (!["csv", "xlsx"].includes(format) || !period || !employeeId) {
       return;
     }
 
@@ -508,8 +508,8 @@ export const registerAdminEmployeesFlow = (
       }
       const shifts = await reportService.getEmployeeShiftsForExport(employeeId, period.range);
       const reportForExport = { ...report, shifts };
-      const file = exportService.buildEmployeeReportCsv(reportForExport, env.timezone);
-      await ctx.replyWithDocument({ source: file.content, filename: file.filename });
+      const file = await exportService.buildEmployeeReportXlsx(reportForExport, env.timezone);
+      await ctx.replyWithDocument({ source: file.content, filename: file.filename, mimeType: file.mimeType } as any);
     } catch (error) {
       logger.error({ err: error }, "Failed to export employee report");
       await ctx.reply("Не удалось сформировать файл. Попробуйте позже.");
@@ -537,8 +537,8 @@ export const registerAdminEmployeesFlow = (
       }
       const shifts = await reportService.getEmployeeShiftsForExport(employeeId, period.range);
       const reportForExport = { ...report, shifts };
-      const file = exportService.buildEmployeeReportCsv(reportForExport, env.timezone);
-      await ctx.replyWithDocument({ source: file.content, filename: file.filename });
+      const file = await exportService.buildEmployeeReportXlsx(reportForExport, env.timezone);
+      await ctx.replyWithDocument({ source: file.content, filename: file.filename, mimeType: file.mimeType } as any);
     } catch (error) {
       logger.error({ err: error }, "Failed to export employee report");
       await ctx.reply("Не удалось сформировать файл. Попробуйте позже.");

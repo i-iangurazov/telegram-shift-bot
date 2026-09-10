@@ -1,189 +1,52 @@
+import { table } from "../../db/table";
 import { Telegraf } from "telegraf";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { logEvent } from "../../server/logging/eventLog";
+import { updateContext } from "../../server/updateContext";
 
-export interface ProcessQueueSummary {
-  picked: number;
-  processed: number;
-  done: number;
-  failed: number;
-  skipped: number;
-}
-
-const MAX_ATTEMPTS = 10;
-const BASE_BACKOFF_SECONDS = 10;
-const MAX_BACKOFF_SECONDS = 10 * 60;
-
-const detectUpdateType = (update: Record<string, unknown>): string | undefined => {
-  const knownTypes = [
-    "message",
-    "edited_message",
-    "callback_query",
-    "inline_query",
-    "chosen_inline_result",
-    "channel_post",
-    "edited_channel_post",
-    "chat_member",
-    "my_chat_member",
-    "chat_join_request",
-    "shipping_query",
-    "pre_checkout_query",
-    "poll",
-    "poll_answer"
-  ];
-
-  for (const key of knownTypes) {
-    if (key in update) {
-      return key;
-    }
-  }
-  return undefined;
-};
-
-const extractQueueMeta = (payload: Record<string, any>) => {
-  const updateType = detectUpdateType(payload);
-  const message =
-    payload.message ??
-    payload.edited_message ??
-    payload.channel_post ??
-    payload.edited_channel_post ??
-    payload.callback_query?.message ??
-    payload.chat_join_request ??
-    payload.chat_member ??
-    payload.my_chat_member;
-  const callbackData = payload.callback_query?.data;
-
-  return {
-    updateType,
-    meta: {
-      topKeys: Object.keys(payload),
-      messageKeys: message ? Object.keys(message) : null,
-      hasPhoto: Boolean(message?.photo?.length),
-      hasText: Boolean(message?.text),
-      hasCaption: Boolean(message?.caption),
-      mediaGroupId: message?.media_group_id ? String(message.media_group_id) : undefined,
-      callbackDataPrefix: typeof callbackData === "string" ? callbackData.slice(0, 20) : undefined
-    }
-  };
-};
-
-const getErrorMessage = (error: unknown): string => {
-  if (!error) {
-    return "Unknown error";
-  }
-  if (error instanceof Error) {
-    return error.message || error.name;
-  }
-  if (typeof error === "string") {
-    return error;
-  }
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-};
-
-const truncate = (value: string, max: number): string => {
-  if (value.length <= max) {
-    return value;
-  }
-  return value.slice(0, max);
-};
+export interface ProcessQueueSummary { picked: number; processed: number; done: number; failed: number; skipped: number; retried: number; recovered: number }
+const LEASE_MS = 120_000;
+export const updateActorKey = (u: any): string => String(u.message?.from?.id ?? u.callback_query?.from?.id ?? u.edited_message?.from?.id ?? `update:${u.update_id}`);
 
 type PrismaLike = PrismaClient | Prisma.TransactionClient;
-
-export const runProcessUpdateQueueOnce = async (params: {
-  bot: Telegraf;
-  prisma: PrismaLike;
-  limit: number;
-  now?: Date;
-}): Promise<ProcessQueueSummary> => {
+export const runProcessUpdateQueueOnce = async (params: { bot: Telegraf; prisma: PrismaLike; limit: number; now?: Date; actorKey?: string }): Promise<ProcessQueueSummary> => {
   const now = params.now ?? new Date();
-  const rows = await params.prisma.telegramUpdateQueue.findMany({
-    where: {
-      status: "pending",
-      nextRunAt: { lte: now }
-    },
-    orderBy: { createdAt: "asc" },
-    take: params.limit
+  const recovered = await params.prisma.telegramUpdateQueue.updateMany({
+    where: { status: "processing", nextRunAt: { lte: now } }, data: { status: "pending" }
   });
-
-  const summary: ProcessQueueSummary = {
-    picked: rows.length,
-    processed: 0,
-    done: 0,
-    failed: 0,
-    skipped: 0
-  };
-
+  const rows = await params.prisma.telegramUpdateQueue.findMany({
+    where: { status: "pending", nextRunAt: { lte: now }, ...(params.actorKey ? { actorKey: params.actorKey } : {}) },
+    orderBy: [{ createdAt: "asc" }, { updateId: "asc" }], take: params.limit
+  });
+  const summary: ProcessQueueSummary = { picked: rows.length, processed: 0, done: 0, failed: 0, skipped: 0, retried: 0, recovered: recovered.count };
   for (const row of rows) {
-    const claimed = await params.prisma.telegramUpdateQueue.updateMany({
-      where: {
-        id: row.id,
-        status: "pending",
-        nextRunAt: { lte: now }
-      },
-      data: {
-        status: "processing"
-      }
-    });
-
-    if (claimed.count === 0) {
-      summary.skipped += 1;
-      continue;
-    }
-
-    summary.processed += 1;
-
-    const payload = row.payload && typeof row.payload === "object" ? (row.payload as Record<string, any>) : {};
-    const { updateType, meta } = extractQueueMeta(payload);
-
+    const lease = new Date(Date.now() + LEASE_MS);
+    // One atomic claim. An older pending/processing event blocks later events of
+    // the same employee, including while it is waiting for a retry.
+    const claimed = await params.prisma.$executeRaw`
+      UPDATE ${table("TelegramUpdateQueue")} q SET status = 'processing', "nextRunAt" = (${lease}::timestamptz AT TIME ZONE 'UTC')
+      WHERE q.id = ${row.id} AND q.status = 'pending' AND q."nextRunAt" <= (${now}::timestamptz AT TIME ZONE 'UTC')
+        AND NOT EXISTS (
+          SELECT 1 FROM ${table("TelegramUpdateQueue")} older
+          WHERE older."actorKey" = q."actorKey" AND older.status IN ('pending', 'processing', 'failed')
+          AND (older."createdAt", older."updateId") < (q."createdAt", q."updateId")
+        )`;
+    if (!claimed) { summary.skipped++; continue; }
+    summary.processed++;
     try {
-      await params.bot.handleUpdate(payload as any);
-      await params.prisma.telegramUpdateQueue.update({
-        where: { id: row.id },
-        data: {
-          status: "done"
-        }
-      });
-      summary.done += 1;
+      await updateContext.run({ receivedAt: row.createdAt, updateId: row.updateId }, () => params.bot.handleUpdate(row.payload as any));
+      await params.prisma.telegramUpdateQueue.updateMany({ where: { id: row.id, status: "processing", nextRunAt: lease }, data: { status: "done", lastError: null } });
+      summary.done++;
     } catch (error) {
-      const nextAttempts = row.attempts + 1;
-      const backoffSeconds = Math.min(Math.pow(2, nextAttempts) * BASE_BACKOFF_SECONDS, MAX_BACKOFF_SECONDS);
-      const jitter = Math.floor(Math.random() * 1000);
-      const nextRunAt = new Date(Date.now() + backoffSeconds * 1000 + jitter);
-      const status = nextAttempts >= MAX_ATTEMPTS ? "failed" : "pending";
-      const lastError = truncate(getErrorMessage(error), 500);
-
-      await params.prisma.telegramUpdateQueue.update({
-        where: { id: row.id },
-        data: {
-          status,
-          attempts: nextAttempts,
-          lastError,
-          nextRunAt
-        }
-      });
-
-      if (status === "failed") {
-        summary.failed += 1;
-      }
-
-      await logEvent(params.prisma, {
-        level: "error",
-        kind: "queue_update_error",
-        updateId: row.updateId,
-        updateType,
-        meta: {
-          ...meta,
-          attempts: nextAttempts
-        },
-        err: error
-      });
-
+      const attempts = row.attempts + 1;
+      const status = attempts >= 10 ? "failed" : "pending";
+      const nextRunAt = new Date(Date.now() + Math.min(2 ** attempts * 10000, 600000));
+      // Do not persist arbitrary HTTP error text: it can contain token-bearing URLs.
+      await params.prisma.telegramUpdateQueue.updateMany({ where: { id: row.id, status: "processing", nextRunAt: lease },
+        data: { status, attempts, nextRunAt, lastError: error instanceof Error ? error.name : "Error" } });
+      if (status === "failed") summary.failed++; else summary.retried++;
+      await logEvent(params.prisma, { level: "error", kind: "queue_update_error", updateId: row.updateId, meta: { attempts, status } });
     }
   }
-
   return summary;
 };

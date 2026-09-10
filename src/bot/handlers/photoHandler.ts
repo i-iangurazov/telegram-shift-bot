@@ -59,6 +59,10 @@ export const registerPhotoHandler = (
         return;
       }
 
+      if (result.type === "stale_photo") {
+        await ctx.reply("Фото относится к уже обработанной смене. Обратитесь к руководителю для сверки.");
+        return;
+      }
       if (result.type === "open_shift_exists") {
         await ctx.reply(messages.dailyCloseShiftAlreadyOpen(env.dailyAutoCloseTime));
         return;
@@ -68,10 +72,11 @@ export const registerPhotoHandler = (
         ? messages.confirmStartPrompt
         : messages.confirmEndPrompt;
 
-      await ctx.reply(prompt, buildPendingActionKeyboard(result.pendingAction.id));
+      const sent = await ctx.reply(prompt, buildPendingActionKeyboard(result.pendingAction.id));
+      await pendingActionService.markPromptDelivered(result.pendingAction.id, sent.message_id);
     } catch (error) {
       logger.error({ err: error }, "Failed to create pending action");
-      await ctx.reply("Не удалось обработать фото. Попробуйте позже.");
+      throw error;
     }
   });
 

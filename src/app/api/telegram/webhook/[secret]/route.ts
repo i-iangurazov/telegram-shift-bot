@@ -1,3 +1,4 @@
+import { runProcessUpdateQueueOnce, updateActorKey } from "../../../../../jobs/tasks/processUpdateQueueTask";
 import { NextRequest, NextResponse } from "next/server";
 import { env } from "../../../../../config/env";
 import { logger } from "../../../../../config/logger";
@@ -6,6 +7,7 @@ import { getApp } from "../../../../../server/appContainer";
 import { logEvent } from "../../../../../server/logging/eventLog";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const detectUpdateType = (update: Record<string, unknown>): string | undefined => {
   const knownTypes = [
@@ -95,6 +97,7 @@ export async function POST(
     }
   }
 
+  const receivedAt = new Date();
   const contentType = req.headers.get("content-type");
   let rawBody = "";
   let update: any;
@@ -116,11 +119,11 @@ export async function POST(
     } catch (logError) {
       logger.error({ err: logError }, "Failed to log webhook parse error");
     }
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: false }, { status: 400 });
   }
 
   const updateId = typeof update.update_id === "number" ? update.update_id : null;
-  if (!updateId) {
+  if (updateId === null) {
     await logEvent(prisma, {
       level: "error",
       kind: "webhook_missing_update_id",
@@ -136,7 +139,9 @@ export async function POST(
       update: {},
       create: {
         updateId,
-        payload: update
+        payload: update,
+        actorKey: updateActorKey(update),
+        createdAt: receivedAt
       }
     });
   } catch (error) {
@@ -151,21 +156,12 @@ export async function POST(
     } catch (logError) {
       logger.error({ err: logError }, "Failed to log webhook queue error");
     }
+    return NextResponse.json({ ok: false }, { status: 503 });
   }
 
   try {
     const app = await getApp();
-    await app.bot.handleUpdate(update);
-    await prisma.telegramUpdateQueue.updateMany({
-      where: {
-        updateId,
-        status: "pending"
-      },
-      data: {
-        status: "done",
-        lastError: null
-      }
-    });
+    await runProcessUpdateQueueOnce({ bot: app.bot, prisma, limit: 5, actorKey: updateActorKey(update) });
   } catch (error) {
     try {
       const meta = extractUpdateMeta(update);

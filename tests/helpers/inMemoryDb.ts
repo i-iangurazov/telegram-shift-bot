@@ -224,6 +224,10 @@ export class InMemoryShiftRepository implements ShiftRepository {
       .sort((a, b) => b.startTime.getTime() - a.startTime.getTime())[0] ?? null;
   }
 
+  async findShiftAt(employeeId: number, at: Date): Promise<ShiftRecord | null> {
+    return this.db.shifts.filter(s => s.employeeId === employeeId && s.startTime <= at).sort((a,b) => b.startTime.getTime()-a.startTime.getTime())[0] ?? null;
+  }
+
   async findLastShift(employeeId: number): Promise<ShiftRecord | null> {
     return this.db.shifts
       .filter((shift) => shift.employeeId === employeeId)
@@ -585,6 +589,14 @@ export class InMemoryShiftRepository implements ShiftRepository {
 }
 
 export class InMemoryPendingActionRepository implements PendingActionRepository {
+  async markPromptDelivered(id: number, messageId: number): Promise<void> {
+    const row = this.db.pendingActions.find(p => p.id === id); if (row) row.promptMessageId = messageId;
+  }
+  async refreshUndeliveredPrompt(id: number, expiresAt: Date): Promise<PendingActionRecord | null> {
+    const row = this.db.pendingActions.find(p => p.id === id && !p.promptMessageId && [PendingActionStatus.PENDING, PendingActionStatus.EXPIRED].includes(p.status as any));
+    if (!row) return null; row.expiresAt = expiresAt; row.status = PendingActionStatus.PENDING; return row;
+  }
+
   constructor(private db: InMemoryDatabase) {}
 
   async findById(id: number, _tx?: unknown): Promise<PendingActionRecord | null> {

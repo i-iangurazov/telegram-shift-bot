@@ -29,7 +29,7 @@ test("rejects missing internal secret", async () => {
   expect(res.status).toBe(401);
 });
 
-test("skips regular tick before db work on disabled production hosts", async () => {
+test("runs regular tick on formerly disabled production hosts", async () => {
   const { POST } = await import("../../src/app/api/internal/tick/route");
   const req = buildRequest("https://project-iu5l5.vercel.app/api/internal/tick", {
     Authorization: "Bearer test-internal"
@@ -42,8 +42,7 @@ test("skips regular tick before db work on disabled production hosts", async () 
   expect(body).toMatchObject({
     ok: true,
     mode: "regular",
-    skipped: true,
-    reason: "regular_tick_disabled_for_host"
+    autoClosed: 0
   });
 });
 

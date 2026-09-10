@@ -13,7 +13,7 @@ const isAuthorized = (req: NextRequest): boolean => {
   const authHeader = req.headers.get("authorization");
   const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
   const headerSecret = req.headers.get("x-internal-secret");
-  return bearer === env.internalSecret || headerSecret === env.internalSecret;
+  return bearer === env.internalSecret || headerSecret === env.internalSecret || Boolean(env.cronSecret && bearer === env.cronSecret);
 };
 
 const parseType = (value: string | null): "daily" | "weekly" | null => {
@@ -134,3 +134,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 }
+
+// Vercel Cron invokes GET with Authorization: Bearer CRON_SECRET.
+export const GET = POST;

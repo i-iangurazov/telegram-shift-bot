@@ -126,7 +126,7 @@ export const registerPendingActionHandlers = (
       }
     } catch (error) {
       logger.error({ err: error }, "Failed to confirm pending action");
-      await ctx.reply("Не удалось подтвердить действие. Попробуйте позже.");
+      throw error;
     }
   });
 
@@ -167,7 +167,7 @@ export const registerPendingActionHandlers = (
       }
     } catch (error) {
       logger.error({ err: error }, "Failed to cancel pending action");
-      await ctx.reply("Не удалось отменить действие. Попробуйте позже.");
+      throw error;
     }
   });
 };

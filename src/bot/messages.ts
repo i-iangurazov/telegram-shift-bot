@@ -30,7 +30,6 @@ export const messages = {
   employeeActionPrompt: (name: string) => `Сотрудник: ${name}. Выберите действие:`,
   photoPeriodPrompt: (name: string) => `Фото для ${name}. Выберите период:`,
   exportReady: "Файл готов.",
-  exportSkipped: "Слишком много смен для экспорта. Отправлен только общий файл.",
   searchHint: "Введите /employees <запрос> для поиска по имени или username.",
   noEmployeesFound: "Сотрудники не найдены.",
   reportEmpty: "Данные за период отсутствуют.",

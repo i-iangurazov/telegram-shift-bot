@@ -1,4 +1,6 @@
-import { PendingActionStatus, PendingActionType, type Prisma } from "@prisma/client";
+import { table } from "../db/table";
+import { updateReceivedAt } from "../server/updateContext";
+import { ClosedReason, PendingActionStatus, PendingActionType, type Prisma } from "@prisma/client";
 import { EmployeeRepository } from "../repositories/employeeRepository";
 import { ShiftRepository } from "../repositories/shiftRepository";
 import { PendingActionRepository } from "../repositories/pendingActionRepository";
@@ -23,6 +25,7 @@ export interface PendingActionConfig {
 
 export type PendingActionCreateResult =
   | { type: "duplicate" }
+  | { type: "stale_photo" }
   | { type: "open_shift_exists"; employee: EmployeeRecord }
   | { type: "pending"; pendingAction: PendingActionRecord; actionType: PendingActionType; employee: EmployeeRecord };
 
@@ -64,6 +67,7 @@ export class PendingActionService {
     chatId: number;
     fileId: string;
     messageDate: Date;
+    receivedAt?: Date;
   }): Promise<PendingActionCreateResult> {
     const chatId = String(params.chatId);
     const alreadyProcessed = await this.shiftRepo.isMessageProcessed(chatId, params.messageId);
@@ -73,11 +77,29 @@ export class PendingActionService {
 
     const existingPending = await this.pendingRepo.findByChatMessage(chatId, params.messageId);
     if (existingPending) {
+      if (existingPending.promptMessageId == null) {
+        const refreshed = await this.pendingRepo.refreshUndeliveredPrompt(existingPending.id,
+          new Date(this.clock.now().getTime() + this.config.ttlMinutes * 60000));
+        const employee = refreshed ? await this.employeeRepo.findById(refreshed.employeeId) : null;
+        if (refreshed && employee) return { type: "pending", pendingAction: refreshed, actionType: refreshed.actionType, employee };
+      }
       return { type: "duplicate" };
     }
 
     const employee = await this.employeeRepo.upsertFromTelegram(params.user);
-    const openShift = await this.shiftRepo.findOpenShift(employee.id);
+    if (!Number.isFinite(params.messageDate.getTime())) throw new Error("Некорректное время фотографии");
+    let openShift = await this.shiftRepo.findOpenShift(employee.id);
+    const lastShift = await this.shiftRepo.findLastShift(employee.id);
+    if (lastShift && lastShift.startTime > params.messageDate) {
+      const historical = await this.shiftRepo.findShiftAt(employee.id, params.messageDate);
+      if (historical && (!historical.endTime || (historical.closedReason === ClosedReason.AUTO_TIMEOUT && params.messageDate < historical.endTime))) {
+        openShift = historical;
+      } else return { type: "stale_photo" };
+    }
+    if (!openShift && lastShift?.endTime && params.messageDate < lastShift.endTime) {
+      if (lastShift.closedReason === ClosedReason.AUTO_TIMEOUT || lastShift.closedReason === ClosedReason.AUTO_DAILY) openShift = lastShift;
+      else return { type: "stale_photo" };
+    }
 
     if (this.isStartOnlyDailyClose() && openShift) {
       if (!this.isDailyCloseDue(openShift, params.messageDate)) {
@@ -94,7 +116,10 @@ export class PendingActionService {
     const actionType = !openShift || isOverdue ? PendingActionType.START : PendingActionType.END;
 
     const createdAt = params.messageDate;
-    const expiresAt = new Date(createdAt.getTime() + this.config.ttlMinutes * 60 * 1000);
+    // The ten-minute confirmation window starts when we can present the prompt.
+    // Keep the source photo timestamp separate and immutable.
+    const promptedAt = params.receivedAt ?? this.clock.now();
+    const expiresAt = new Date(promptedAt.getTime() + this.config.ttlMinutes * 60 * 1000);
 
     const pendingAction = await this.pendingRepo.createPendingAction({
       employeeId: employee.id,
@@ -103,6 +128,7 @@ export class PendingActionService {
       actionType,
       photoFileId: params.fileId,
       photoMessageId: params.messageId,
+      targetShiftId: actionType === PendingActionType.END ? openShift?.id : null,
       createdAt,
       expiresAt
     });
@@ -110,7 +136,11 @@ export class PendingActionService {
     return { type: "pending", pendingAction, actionType, employee };
   }
 
-  async confirmAction(id: number, userId: string, now: Date = this.clock.now()): Promise<PendingActionConfirmResult> {
+  async markPromptDelivered(id: number, messageId: number): Promise<void> {
+    await this.pendingRepo.markPromptDelivered(id, messageId);
+  }
+
+  async confirmAction(id: number, userId: string, now: Date = updateReceivedAt() ?? this.clock.now()): Promise<PendingActionConfirmResult> {
     return this.runInTransaction(async (tx) => {
       const pending = await this.pendingRepo.findById(id, tx);
       if (!pending) {
@@ -121,7 +151,8 @@ export class PendingActionService {
         return { type: "forbidden" };
       }
 
-      if (pending.status !== PendingActionStatus.PENDING) {
+      if (tx) await tx.$queryRaw`SELECT id FROM ${table("Employee")} WHERE id = ${pending.employeeId} FOR UPDATE`;
+      if (pending.status !== PendingActionStatus.PENDING && !(pending.status === PendingActionStatus.EXPIRED && now < pending.expiresAt)) {
         return { type: "already_handled", status: pending.status };
       }
 
@@ -149,9 +180,15 @@ export class PendingActionService {
       }
 
       const messageTime = pending.createdAt;
+      const processedAt = this.clock.now();
       const maxShiftMs = this.config.maxShiftHours * 60 * 60 * 1000;
 
       if (pending.actionType === PendingActionType.START) {
+        const latestShift = await this.shiftRepo.findLastShift(employee.id, tx);
+        if (latestShift && (latestShift.startTime > messageTime || (latestShift.endTime && latestShift.endTime > messageTime))) {
+          await this.pendingRepo.updateStatus(pending.id, PendingActionStatus.CANCELLED, now, tx);
+          return { type: "open_shift_exists" };
+        }
         const openShift = await this.shiftRepo.findOpenShift(employee.id, tx);
         let autoClosed: ShiftWithRelations | null = null;
         if (openShift) {
@@ -166,11 +203,11 @@ export class PendingActionService {
           if (this.isStartOnlyDailyClose()) {
             const endTime = this.getDailyCloseEndTime(openShift);
             const durationMinutes = this.calculateDurationMinutes(openShift.startTime, endTime);
-            autoClosed = await this.shiftRepo.dailyAutoCloseShift(openShift.id, endTime, durationMinutes, now, tx);
+            autoClosed = await this.shiftRepo.dailyAutoCloseShift(openShift.id, endTime, durationMinutes, processedAt, tx);
           } else {
             const endTime = new Date(openShift.startTime.getTime() + maxShiftMs);
             const durationMinutes = this.config.maxShiftHours * 60;
-            autoClosed = await this.shiftRepo.autoCloseShift(openShift.id, endTime, durationMinutes, now, tx);
+            autoClosed = await this.shiftRepo.autoCloseShift(openShift.id, endTime, durationMinutes, processedAt, tx);
           }
 
           if (!autoClosed) {
@@ -203,8 +240,11 @@ export class PendingActionService {
         return { type: "open_shift_exists" };
       }
 
-      const openShift = await this.shiftRepo.findOpenShift(employee.id, tx);
-      if (!openShift) {
+      const openShift = pending.targetShiftId != null
+        ? await this.shiftRepo.findShiftById(pending.targetShiftId, tx)
+        : await this.shiftRepo.findLastShift(employee.id, tx);
+      if (!openShift || openShift.employeeId !== employee.id || messageTime < openShift.startTime ||
+          (openShift.endTime && !(openShift.closedReason === ClosedReason.AUTO_TIMEOUT && messageTime < openShift.endTime))) {
         await this.pendingRepo.updateStatus(pending.id, PendingActionStatus.CANCELLED, now, tx);
         return { type: "no_open_shift" };
       }
@@ -213,7 +253,7 @@ export class PendingActionService {
       if (overdue) {
         const endTime = new Date(openShift.startTime.getTime() + maxShiftMs);
         const durationMinutes = this.config.maxShiftHours * 60;
-        const autoClosed = await this.shiftRepo.autoCloseShift(openShift.id, endTime, durationMinutes, now, tx);
+        const autoClosed = await this.shiftRepo.autoCloseShift(openShift.id, endTime, durationMinutes, processedAt, tx);
         if (autoClosed) {
           return { type: "auto_closed", autoClose: autoClosed };
         }
@@ -242,7 +282,7 @@ export class PendingActionService {
     });
   }
 
-  async cancelAction(id: number, userId: string, now: Date = this.clock.now()): Promise<PendingActionCancelResult> {
+  async cancelAction(id: number, userId: string, now: Date = updateReceivedAt() ?? this.clock.now()): Promise<PendingActionCancelResult> {
     return this.runInTransaction(async (tx) => {
       const pending = await this.pendingRepo.findById(id, tx);
       if (!pending) {

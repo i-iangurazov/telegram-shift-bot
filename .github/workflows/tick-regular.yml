@@ -5,14 +5,27 @@ on:
     - cron: "0,30 * * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  tick:
+  run:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: [MAIN, COPY, DAILY]
     steps:
-      - name: Trigger regular tick
+      - name: Run and verify actual result
         env:
-          PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
-          INTERNAL_SECRET: ${{ secrets.INTERNAL_SECRET }}
+          PUBLIC_BASE_URL: ${{ secrets[format('PUBLIC_BASE_URL_{0}', matrix.instance)] }}
+          INTERNAL_SECRET: ${{ secrets[format('INTERNAL_SECRET_{0}', matrix.instance)] }}
         run: |
-          curl -sS -X POST "$PUBLIC_BASE_URL/api/internal/tick" \
-            -H "Authorization: Bearer $INTERNAL_SECRET"
+          set -euo pipefail
+          test -n "$PUBLIC_BASE_URL"
+          test -n "$INTERNAL_SECRET"
+          response=$(curl --fail-with-body --silent --show-error --max-time 65 -X POST "${PUBLIC_BASE_URL%/}/api/internal/tick" \
+            -H "Authorization: Bearer $INTERNAL_SECRET")
+          echo "$response" | jq '{ok, mode, skipped, error, queue, autoClosed, ranAt, db}'
+          echo "$response" | jq -e '.ok == true and (.error != true) and (.skipped != true) and ((.queue.failed // 0) == 0) and ((.queue.retried // 0) == 0)'

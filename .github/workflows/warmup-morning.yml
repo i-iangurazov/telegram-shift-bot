@@ -1,19 +1,29 @@
 name: warmup-morning
 
 on:
-  schedule:
-    - cron: "0 2 * * *" # 08:00 Bishkek (UTC+6)
-    - cron: "0 3 * * *" # 09:00 Bishkek (UTC+6)
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  warmup:
+  run:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: [MAIN, COPY, DAILY]
     steps:
-      - name: Warmup internal health
-        run: |
-          curl -sS -f "${PUBLIC_BASE_URL}/api/internal/health" \
-            -H "Authorization: Bearer ${INTERNAL_SECRET}"
+      - name: Run and verify actual result
         env:
-          PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
-          INTERNAL_SECRET: ${{ secrets.INTERNAL_SECRET }}
+          PUBLIC_BASE_URL: ${{ secrets[format('PUBLIC_BASE_URL_{0}', matrix.instance)] }}
+          INTERNAL_SECRET: ${{ secrets[format('INTERNAL_SECRET_{0}', matrix.instance)] }}
+        run: |
+          set -euo pipefail
+          test -n "$PUBLIC_BASE_URL"
+          test -n "$INTERNAL_SECRET"
+          response=$(curl --fail-with-body --silent --show-error --max-time 65 -X GET "${PUBLIC_BASE_URL%/}/api/internal/health" \
+            -H "Authorization: Bearer $INTERNAL_SECRET")
+          echo "$response" | jq '{ok, mode, skipped, error, queue, autoClosed, ranAt, db}'
+          echo "$response" | jq -e '.ok == true and (.error != true) and (.skipped != true) and ((.queue.failed // 0) == 0) and ((.queue.retried // 0) == 0)'

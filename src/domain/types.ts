@@ -64,6 +64,8 @@ export interface PendingActionRecord {
   actionType: PendingActionType;
   photoFileId: string;
   photoMessageId: number;
+  targetShiftId?: number | null;
+  promptMessageId?: number | null;
   createdAt: Date;
   expiresAt: Date;
   status: PendingActionStatus;

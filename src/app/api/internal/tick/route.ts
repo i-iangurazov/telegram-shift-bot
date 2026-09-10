@@ -11,23 +11,13 @@ import { logEvent } from "../../../../server/logging/eventLog";
 import { safeSendMessage } from "../../../../bot/utils/safeSendMessage";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const isAuthorized = (req: NextRequest): boolean => {
   const authHeader = req.headers.get("authorization");
   const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
   const headerSecret = req.headers.get("x-internal-secret");
-  return bearer === env.internalSecret || headerSecret === env.internalSecret;
-};
-
-const regularTickDisabledHosts = new Set(["project-iu5l5.vercel.app", "project-7wkhn.vercel.app"]);
-
-const getRequestHost = (req: NextRequest): string => {
-  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? req.nextUrl.host;
-  return host.split(":")[0]?.toLowerCase() ?? "";
-};
-
-const shouldSkipDbBackedRegularTick = (req: NextRequest, mode: string): boolean => {
-  return mode === "regular" && regularTickDisabledHosts.has(getRequestHost(req));
+  return bearer === env.internalSecret || headerSecret === env.internalSecret || Boolean(env.cronSecret && bearer === env.cronSecret);
 };
 
 const monitorQueueBacklog = async (params: {
@@ -106,16 +96,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const mode = modeParam === "daily" ? "daily" : modeParam === "queue" ? "queue" : "regular";
   const ranAt = new Date();
 
-  if (shouldSkipDbBackedRegularTick(req, mode)) {
-    return NextResponse.json({
-      ok: true,
-      mode,
-      skipped: true,
-      reason: "regular_tick_disabled_for_host",
-      ranAt: ranAt.toISOString()
-    });
-  }
-
   let app: Awaited<ReturnType<typeof getApp>> | null = null;
 
   try {
@@ -175,8 +155,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       logsPurged = deleted.count;
     }
 
+    await logEvent(app.prisma, { level: "info", kind: "tick_completed", meta: { mode, autoClosed: autoCloseSummary.autoClosed, queue: queueSummary } });
     return NextResponse.json({
-      ok: true,
+      ok: !queueSummary?.failed && !queueSummary?.retried,
       mode,
       queue: queueSummary,
       expiredPending,
@@ -199,10 +180,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     logger.error({ err: error }, "Internal tick failed");
     return NextResponse.json({
-      ok: true,
+      ok: false,
       mode,
       error: true,
       ranAt: ranAt.toISOString()
-    });
+    }, { status: 500 });
   }
 }
+
+// Vercel Cron invokes GET with Authorization: Bearer CRON_SECRET.
+export const GET = POST;

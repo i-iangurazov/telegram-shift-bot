@@ -1,3 +1,6 @@
+import { env } from "../config/env";
+import { sendXlsxDocument } from "./xlsxTransport";
+import { XLSX_MIME } from "../services/exportService";
 import { Telegram } from "telegraf";
 import { prisma } from "../db/prisma";
 import { logEvent } from "../server/logging/eventLog";
@@ -174,11 +177,14 @@ export const applySafeTelegram = (telegram: Telegram): void => {
       telegram,
       method,
       payload: payload ?? {},
-      rawCall: anyTelegram[RAW_CALL_API]
+      rawCall: (name, body) => name === "sendDocument" && body.document?.mimeType === XLSX_MIME
+        ? sendXlsxDocument(env.telegramBotToken, body)
+        : anyTelegram[RAW_CALL_API](name, body)
     });
     if (result.ok) {
       return result.result;
     }
+    if (method !== "answerCallbackQuery") throw result.error ?? new Error(result.reason);
     return { ok: false };
   };
   anyTelegram[SAFE_CALL_API] = wrappedCall;

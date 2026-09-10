@@ -71,6 +71,8 @@ model PendingAction {
   actionType     PendingActionType
   photoFileId    String
   photoMessageId Int
+  targetShiftId  Int?
+  promptMessageId Int?
   createdAt      DateTime             @default(now())
   expiresAt      DateTime
   status         PendingActionStatus  @default(PENDING)
@@ -126,6 +128,7 @@ model EventLog {
 model TelegramUpdateQueue {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
+  actorKey  String?
   updateId  Int      @unique
   payload   Json
   status    String   @default("pending")
@@ -134,6 +137,7 @@ model TelegramUpdateQueue {
   nextRunAt DateTime @default(now())
 
   @@index([status, nextRunAt, createdAt])
+  @@index([actorKey, status, updateId])
 }
 
 enum ClosedReason {

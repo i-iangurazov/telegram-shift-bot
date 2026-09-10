@@ -192,22 +192,14 @@ export const registerAdminReportFlow = (
     const periodToken = parts[2] ?? "";
     const period = resolvePeriodToken(periodToken);
 
-    if (format !== "csv" || !period) {
+    if (!["csv", "xlsx"].includes(format) || !period) {
       return;
     }
 
     try {
-      const report = await reportService.getAllEmployeesReport(period.range);
-      const file = exportService.buildAllEmployeesSummaryCsv(report.period, report.employees, env.timezone);
-      await ctx.replyWithDocument({ source: file.content, filename: file.filename });
-
-      const rawExport = await reportService.getRawShiftsForExport(period.range, 2000);
-      if (rawExport.shifts.length > 0 && rawExport.shifts.length < 2000) {
-        const rawFile = exportService.buildRawShiftsCsv(rawExport.period, rawExport.shifts, env.timezone);
-        await ctx.replyWithDocument({ source: rawFile.content, filename: rawFile.filename });
-      } else if (rawExport.shifts.length >= 2000) {
-        await ctx.reply(messages.exportSkipped);
-      }
+      const raw = await reportService.getRawShiftsForExport(period.range);
+      const file = await exportService.buildAllEmployeesReportXlsx(raw.period, [], raw.shifts, env.timezone);
+      await ctx.replyWithDocument({ source: file.content, filename: file.filename, mimeType: file.mimeType } as any);
     } catch (error) {
       logger.error({ err: error }, "Failed to export all employees report");
       await ctx.reply("Не удалось сформировать файл. Попробуйте позже.");

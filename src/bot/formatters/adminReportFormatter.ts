@@ -1,16 +1,16 @@
 import { ClosedReason } from "@prisma/client";
 import { AllEmployeesReport, EmployeeReport } from "../../services/reportService";
 import { formatDurationMinutes } from "../../utils/format";
-import { formatDate, formatTime } from "../../utils/time";
+import { formatDate, formatTime, formatDateTime } from "../../utils/time";
 import { messages } from "../messages";
 import { formatViolationsList } from "./violationFormatter";
 
 const mapClosedReason = (reason: ClosedReason | null): string => {
   if (reason === ClosedReason.AUTO_TIMEOUT) {
-    return "Автоматически (12 часов)";
+    return "Автоматически по лимиту";
   }
   if (reason === ClosedReason.AUTO_DAILY) {
-    return "Автоматически (день)";
+    return "Ежедневное автозакрытие";
   }
   if (reason === ClosedReason.USER_PHOTO) {
     return "Фото";
@@ -23,6 +23,7 @@ export const buildEmployeeReportMessage = (report: EmployeeReport, tz: string): 
   lines.push("Отчёт по сотруднику");
   lines.push(`Сотрудник: ${report.displayName}`);
   lines.push(`Период: ${formatDate(report.period.from, tz)} – ${formatDate(report.period.to, tz)}`);
+  lines.push(`Часовой пояс: ${tz}`);
   lines.push(`Количество смен: ${report.totalShifts}`);
   lines.push(`Суммарное время: ${formatDurationMinutes(report.totalDurationMinutes)}`);
   lines.push(`Средняя длительность смены: ${formatDurationMinutes(report.averageDurationMinutes)}`);
@@ -58,7 +59,7 @@ export const buildEmployeeReportMessage = (report: EmployeeReport, tz: string): 
       continue;
     }
 
-    const end = formatTime(shift.endTime, tz);
+    const end = formatDate(shift.endTime, tz) === date ? formatTime(shift.endTime, tz) : formatDateTime(shift.endTime, tz);
     const duration = shift.durationMinutes != null ? formatDurationMinutes(shift.durationMinutes) : "—";
     const closeReason = mapClosedReason(shift.closedReason);
     const violationsText = formatViolationsList(shift.violations);

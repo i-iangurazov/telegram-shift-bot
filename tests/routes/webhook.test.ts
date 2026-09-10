@@ -78,7 +78,7 @@ test("enqueues update idempotently and returns ok", async () => {
 
   const count = await prisma.telegramUpdateQueue.count({ where: { updateId: 10 } });
   expect(count).toBe(1);
-  expect(handleSpy).toHaveBeenCalledTimes(2);
+  expect(handleSpy).toHaveBeenCalledTimes(1);
 });
 
 test("webhook returns ok even when handler throws", async () => {

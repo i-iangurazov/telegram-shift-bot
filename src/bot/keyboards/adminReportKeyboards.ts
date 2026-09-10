@@ -116,7 +116,7 @@ export const buildEmployeeExportKeyboard = (
   periodKey: ReportPeriodKey
 ): ReturnType<typeof Markup.inlineKeyboard> => {
   return Markup.inlineKeyboard([
-    [Markup.button.callback("Экспорт CSV", `emp_rep_export:${employeeId}:${periodKey}`)]
+    [Markup.button.callback("Скачать Excel", `emp_rep_export:${employeeId}:${periodKey}`)]
   ]);
 };
 
@@ -146,7 +146,7 @@ export const buildEmployeeReportPaginationKeyboard = (params: {
 export const buildAllExportKeyboard = (periodKey: ReportPeriodKey): ReturnType<typeof Markup.inlineKeyboard> => {
   return Markup.inlineKeyboard([
     [
-      Markup.button.callback("Экспорт CSV", `export_all:csv:${periodKey}`),
+      Markup.button.callback("Скачать Excel", `export_all:xlsx:${periodKey}`),
       Markup.button.callback("Сотрудники", "emp_page:1:")
     ]
   ]);

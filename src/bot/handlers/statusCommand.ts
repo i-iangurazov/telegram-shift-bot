@@ -3,7 +3,7 @@ import { ShiftService } from "../../services/shiftService";
 import { RoleService } from "../../services/roleService";
 import { messages } from "../messages";
 import { env } from "../../config/env";
-import { formatTime } from "../../utils/time";
+import { formatDateTime } from "../../utils/time";
 
 export const registerStatusCommand = (
   bot: Telegraf,
@@ -26,7 +26,7 @@ export const registerStatusCommand = (
       return;
     }
 
-    const time = formatTime(openShift.startTime, env.timezone);
+    const time = formatDateTime(openShift.startTime, env.timezone);
     await reply(messages.openShift(time));
   };
 

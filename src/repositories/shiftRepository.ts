@@ -1,3 +1,4 @@
+import { table } from "../db/table";
 import { ClosedReason, ViolationType, type Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { ShiftRecord, ShiftWithRelations } from "../domain/types";
@@ -6,7 +7,8 @@ type DbClient = Prisma.TransactionClient;
 
 export interface ShiftRepository {
   findOpenShift(employeeId: number, tx?: DbClient): Promise<ShiftRecord | null>;
-  findLastShift(employeeId: number): Promise<ShiftRecord | null>;
+  findShiftAt(employeeId: number, at: Date, tx?: DbClient): Promise<ShiftRecord | null>;
+  findLastShift(employeeId: number, tx?: DbClient): Promise<ShiftRecord | null>;
   isMessageProcessed(chatId: string, messageId: number): Promise<boolean>;
   createShiftStart(data: {
     employeeId: number;
@@ -33,9 +35,9 @@ export interface ShiftRepository {
     employeeId: number,
     from: Date,
     to: Date,
-    options: { limit: number; skip?: number }
+    options: { limit?: number; skip?: number }
   ): Promise<ShiftWithRelations[]>;
-  findShiftById(shiftId: number): Promise<ShiftWithRelations | null>;
+  findShiftById(shiftId: number, tx?: DbClient): Promise<ShiftWithRelations | null>;
   purgeOldPhotos(cutoff: Date, now: Date, take?: number): Promise<number>;
   aggregateEmployeeStats(employeeId: number, from: Date, to: Date): Promise<{
     totalShifts: number;
@@ -73,8 +75,12 @@ export class PrismaShiftRepository implements ShiftRepository {
     });
   }
 
-  async findLastShift(employeeId: number): Promise<ShiftRecord | null> {
-    return prisma.shift.findFirst({
+  async findShiftAt(employeeId: number, at: Date, tx?: DbClient): Promise<ShiftRecord | null> {
+    return (tx ?? prisma).shift.findFirst({ where: { employeeId, startTime: { lte: at } }, orderBy: [{ startTime: "desc" }, { id: "desc" }] });
+  }
+
+  async findLastShift(employeeId: number, tx?: DbClient): Promise<ShiftRecord | null> {
+    return (tx ?? prisma).shift.findFirst({
       where: { employeeId },
       orderBy: { startTime: "desc" }
     });
@@ -123,17 +129,20 @@ export class PrismaShiftRepository implements ShiftRepository {
     durationMinutes: number;
   }, tx?: DbClient): Promise<ShiftRecord> {
     const client = tx ?? prisma;
-    return client.shift.update({
-      where: { id: data.shiftId },
-      data: {
-        endTime: data.endTime,
-        endPhotoFileId: data.endPhotoFileId,
-        endMessageId: data.endMessageId,
-        endChatId: data.endChatId,
-        closedReason: ClosedReason.USER_PHOTO,
-        durationMinutes: data.durationMinutes
-      }
+    if (!tx) return prisma.$transaction(inner => this.closeShiftByUserPhoto(data, inner));
+    // An on-time source photo may arrive after the timeout worker. It still wins.
+    const updated = await client.shift.updateMany({
+      where: { id: data.shiftId, startTime: { lte: data.endTime }, OR: [
+        { endTime: null }, { closedReason: ClosedReason.AUTO_TIMEOUT, endTime: { gt: data.endTime } }
+      ] },
+      data: { endTime: data.endTime, endPhotoFileId: data.endPhotoFileId,
+        endMessageId: data.endMessageId, endChatId: data.endChatId,
+        closedReason: ClosedReason.USER_PHOTO, durationMinutes: data.durationMinutes,
+        autoClosedAt: null, alertedAt: null }
     });
+    if (!updated.count) throw new Error("Смена уже закрыта другим событием");
+    await client.shiftViolation.deleteMany({ where: { shiftId: data.shiftId, type: ViolationType.NOT_CLOSED_IN_TIME } });
+    return client.shift.findUniqueOrThrow({ where: { id: data.shiftId } });
   }
 
   async createViolation(shiftId: number, type: ViolationType, tx?: DbClient): Promise<void> {
@@ -269,7 +278,7 @@ export class PrismaShiftRepository implements ShiftRepository {
     employeeId: number,
     from: Date,
     to: Date,
-    options: { limit: number; skip?: number }
+    options: { limit?: number; skip?: number }
   ): Promise<ShiftWithRelations[]> {
     return prisma.shift.findMany({
       where: { employeeId, startTime: { gte: from, lte: to } },
@@ -280,8 +289,8 @@ export class PrismaShiftRepository implements ShiftRepository {
     });
   }
 
-  async findShiftById(shiftId: number): Promise<ShiftWithRelations | null> {
-    return prisma.shift.findUnique({
+  async findShiftById(shiftId: number, tx?: DbClient): Promise<ShiftWithRelations | null> {
+    return (tx ?? prisma).shift.findUnique({
       where: { id: shiftId },
       include: { employee: true, violations: true }
     });
@@ -413,10 +422,10 @@ export class PrismaShiftRepository implements ShiftRepository {
     const rows = await prisma.$queryRaw<Array<{ employeeId: number; violations: number }>>`
       SELECT s."employeeId" AS "employeeId",
              COUNT(v.*)::int AS "violations"
-      FROM "Shift" s
-      JOIN "ShiftViolation" v ON v."shiftId" = s."id"
-      WHERE s."startTime" >= ${from}
-        AND s."startTime" <= ${to}
+      FROM ${table("Shift")} s
+      JOIN ${table("ShiftViolation")} v ON v."shiftId" = s."id"
+      WHERE s."startTime" >= (${from}::timestamptz AT TIME ZONE 'UTC')
+        AND s."startTime" <= (${to}::timestamptz AT TIME ZONE 'UTC')
         AND v."type" <> 'SHORT_SHIFT'
       GROUP BY s."employeeId"
     `;
@@ -432,10 +441,10 @@ export class PrismaShiftRepository implements ShiftRepository {
       SELECT s."employeeId" AS "employeeId",
              v."type" AS "type",
              COUNT(v.*)::int AS "count"
-      FROM "Shift" s
-      JOIN "ShiftViolation" v ON v."shiftId" = s."id"
-      WHERE s."startTime" >= ${from}
-        AND s."startTime" <= ${to}
+      FROM ${table("Shift")} s
+      JOIN ${table("ShiftViolation")} v ON v."shiftId" = s."id"
+      WHERE s."startTime" >= (${from}::timestamptz AT TIME ZONE 'UTC')
+        AND s."startTime" <= (${to}::timestamptz AT TIME ZONE 'UTC')
         AND v."type" <> 'SHORT_SHIFT'
       GROUP BY s."employeeId", v."type"
     `;
@@ -460,9 +469,9 @@ export class PrismaShiftRepository implements ShiftRepository {
         s."startTime" AS "startTime",
         s."endTime" AS "endTime",
         s."closedReason" AS "closedReason"
-      FROM "Shift" s
-      WHERE s."startTime" >= ${from}
-        AND s."startTime" <= ${to}
+      FROM ${table("Shift")} s
+      WHERE s."startTime" >= (${from}::timestamptz AT TIME ZONE 'UTC')
+        AND s."startTime" <= (${to}::timestamptz AT TIME ZONE 'UTC')
       ORDER BY s."employeeId", s."startTime" DESC
     `;
 

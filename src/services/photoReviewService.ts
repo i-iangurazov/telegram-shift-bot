@@ -45,7 +45,7 @@ export class PhotoReviewService {
       return {
         key,
         from: start.toDate(),
-        to: end.toDate(),
+        to: end.subtract(1, "millisecond").toDate(),
         label: "Вчера"
       };
     }

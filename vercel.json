@@ -1,0 +1,8 @@
+{
+  "crons": [
+    { "path": "/api/internal/tick", "schedule": "*/5 * * * *" },
+    { "path": "/api/internal/tick?mode=daily", "schedule": "5 3 * * *" },
+    { "path": "/api/internal/digest?type=daily", "schedule": "0 14 * * *" },
+    { "path": "/api/internal/digest?type=weekly", "schedule": "5 14 * * 0" }
+  ]
+}

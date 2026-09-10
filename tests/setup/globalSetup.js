@@ -33,6 +33,8 @@ if (!process.env.DIRECT_URL) {
 }
 
 module.exports = async () => {
+  require("../helpers/assertTestDatabase.cjs")(process.env.DATABASE_URL);
+  require("../helpers/assertTestDatabase.cjs")(process.env.DIRECT_URL);
   execSync("pnpm prisma migrate deploy", {
     stdio: "inherit",
     env: process.env

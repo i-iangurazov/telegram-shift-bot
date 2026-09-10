@@ -41,7 +41,7 @@ export const createBot = (deps: {
         chatId: ctx.chat?.id,
         fromId: ctx.from?.id
       },
-      error
+      error instanceof Error ? error.name : "Error"
     );
     try {
       const message = (ctx.message as any) ?? (ctx.update as any)?.message;
@@ -68,8 +68,9 @@ export const createBot = (deps: {
       });
     } catch (logError) {
       // avoid recursive failures in error handler
-      console.error("Failed to log telegraf error", logError);
+      console.error("Failed to log telegraf error");
     }
+    throw error;
   });
 
   return bot;

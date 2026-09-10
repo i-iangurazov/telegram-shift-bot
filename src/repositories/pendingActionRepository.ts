@@ -5,6 +5,8 @@ import { PendingActionRecord } from "../domain/types";
 type DbClient = Prisma.TransactionClient;
 
 export interface PendingActionRepository {
+  markPromptDelivered(id: number, messageId: number): Promise<void>;
+  refreshUndeliveredPrompt(id: number, expiresAt: Date): Promise<PendingActionRecord | null>;
   findById(id: number, tx?: DbClient): Promise<PendingActionRecord | null>;
   findByChatMessage(chatId: string, messageId: number, tx?: DbClient): Promise<PendingActionRecord | null>;
   hasActiveForUser(telegramUserId: string, now: Date): Promise<boolean>;
@@ -15,6 +17,7 @@ export interface PendingActionRepository {
     actionType: PendingActionType;
     photoFileId: string;
     photoMessageId: number;
+    targetShiftId?: number | null;
     createdAt: Date;
     expiresAt: Date;
   }, tx?: DbClient): Promise<PendingActionRecord>;
@@ -24,6 +27,14 @@ export interface PendingActionRepository {
 }
 
 export class PrismaPendingActionRepository implements PendingActionRepository {
+  async markPromptDelivered(id: number, messageId: number): Promise<void> {
+    await prisma.pendingAction.updateMany({ where: { id, promptMessageId: null }, data: { promptMessageId: messageId } });
+  }
+  async refreshUndeliveredPrompt(id: number, expiresAt: Date): Promise<PendingActionRecord | null> {
+    const updated = await prisma.pendingAction.updateMany({ where: { id, promptMessageId: null, status: { in: [PendingActionStatus.PENDING, PendingActionStatus.EXPIRED] } }, data: { expiresAt, status: PendingActionStatus.PENDING } });
+    return updated.count ? prisma.pendingAction.findUnique({ where: { id } }) : null;
+  }
+
   async findById(id: number, tx?: DbClient): Promise<PendingActionRecord | null> {
     const client = tx ?? prisma;
     return client.pendingAction.findUnique({ where: { id } });
@@ -40,7 +51,7 @@ export class PrismaPendingActionRepository implements PendingActionRepository {
     const pending = await prisma.pendingAction.findFirst({
       where: {
         telegramUserId,
-        status: PendingActionStatus.PENDING,
+        status: { in: [PendingActionStatus.PENDING, PendingActionStatus.EXPIRED] },
         expiresAt: { gt: now }
       },
       select: { id: true }
@@ -56,6 +67,7 @@ export class PrismaPendingActionRepository implements PendingActionRepository {
     actionType: PendingActionType;
     photoFileId: string;
     photoMessageId: number;
+    targetShiftId?: number | null;
     createdAt: Date;
     expiresAt: Date;
   }, tx?: DbClient): Promise<PendingActionRecord> {
@@ -68,6 +80,7 @@ export class PrismaPendingActionRepository implements PendingActionRepository {
         actionType: data.actionType,
         photoFileId: data.photoFileId,
         photoMessageId: data.photoMessageId,
+        targetShiftId: data.targetShiftId,
         createdAt: data.createdAt,
         expiresAt: data.expiresAt
       }
@@ -93,7 +106,7 @@ export class PrismaPendingActionRepository implements PendingActionRepository {
     const updated = await client.pendingAction.updateMany({
       where: {
         id,
-        status: PendingActionStatus.PENDING,
+        status: { in: [PendingActionStatus.PENDING, PendingActionStatus.EXPIRED] },
         expiresAt: { gt: now }
       },
       data: {

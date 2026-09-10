@@ -75,6 +75,7 @@ test("pending action expires after TTL", async () => {
     messageId: 601,
     chatId: 400,
     fileId: "photo-2",
+    receivedAt: createdAt,
     messageDate: createdAt
   });
 
@@ -113,6 +114,7 @@ test("expirePendingActions clears old pending rows", async () => {
     messageId: 701,
     chatId: 500,
     fileId: "photo-3",
+    receivedAt: createdAt,
     messageDate: createdAt
   });
 

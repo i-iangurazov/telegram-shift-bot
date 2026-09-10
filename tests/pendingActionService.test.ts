@@ -85,6 +85,7 @@ describe("PendingActionService", () => {
 
     const create = await service.createFromPhoto({
       user: { id: 504, username: "user", firstName: "Тест", lastName: "User", chatId: 504 },
+      receivedAt: new Date("2024-01-01T10:00:00Z"),
       messageId: 13,
       chatId: 504,
       fileId: "file-4",
