@@ -10,11 +10,12 @@ export const REPORT_PERIOD_PRESETS = [
   { key: "7d", label: "За 7 дней" },
   { key: "30d", label: "За 30 дней" },
   { key: "current_month", label: "Этот месяц" },
-  { key: "previous_month", label: "Прошлый месяц" },
+  { key: "50d", label: "За 50 дней" },
   { key: "12m", label: "За 12 месяцев" }
 ] as const;
 
-export type ReportPeriodKey = (typeof REPORT_PERIOD_PRESETS)[number]["key"];
+// Keep callbacks in previously sent Telegram messages working.
+export type ReportPeriodKey = (typeof REPORT_PERIOD_PRESETS)[number]["key"] | "previous_month";
 
 export interface ReportRange {
   from: Date;
@@ -22,7 +23,10 @@ export interface ReportRange {
   days: number;
 }
 
-const periodKeySet = new Set<ReportPeriodKey>(REPORT_PERIOD_PRESETS.map((preset) => preset.key));
+const periodKeySet = new Set<ReportPeriodKey>([
+  ...REPORT_PERIOD_PRESETS.map((preset) => preset.key),
+  "previous_month"
+]);
 
 const calculateDays = (from: Date, to: Date): number => {
   const diffMs = Math.max(0, to.getTime() - from.getTime());
@@ -57,6 +61,11 @@ export const resolveReportPeriodRange = (params: {
   if (params.key === "30d") {
     const from = nowTz.subtract(30, "day").toDate();
     return { from, to: now, days: 30 };
+  }
+
+  if (params.key === "50d") {
+    const from = nowTz.subtract(50, "day").toDate();
+    return { from, to: now, days: 50 };
   }
 
   if (params.key === "current_month") {

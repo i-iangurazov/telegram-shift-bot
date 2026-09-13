@@ -1,5 +1,5 @@
 import { ClosedReason, EmployeeRoleOverride } from "@prisma/client";
-import { buildEmployeeListKeyboard, buildAllPeriodKeyboard, buildEmployeeReportPaginationKeyboard } from "../src/bot/keyboards/adminReportKeyboards";
+import { buildEmployeeListKeyboard, buildAllPeriodKeyboard, buildEmployeePeriodKeyboard, buildEmployeeReportPaginationKeyboard } from "../src/bot/keyboards/adminReportKeyboards";
 import { buildEmployeeReportMessage, buildAllEmployeesReportMessage } from "../src/bot/formatters/adminReportFormatter";
 import { adminKeyboard } from "../src/bot/keyboards/roleKeyboards";
 import { messages } from "../src/bot/messages";
@@ -213,12 +213,20 @@ describe("Admin flows UI", () => {
     expect(report).toContain("Смены (показаны 11-12 из 12):");
   });
 
-  it("period keyboard exists for all employees", () => {
-    const keyboard = buildAllPeriodKeyboard();
-    const labels = keyboard.reply_markup.inline_keyboard.flat().map((button) => button.text);
-    expect(labels).toContain("Этот месяц");
-    expect(labels).toContain("Прошлый месяц");
-    expect(labels).toContain("За 12 месяцев");
+  it("offers 50 days instead of the previous month in both report menus", () => {
+    const keyboards = [
+      { keyboard: buildAllPeriodKeyboard(), callback: "period_all:50d" },
+      { keyboard: buildEmployeePeriodKeyboard({ employeeId: 10, backPage: 1 }), callback: "period_emp:50d:10" }
+    ];
+    for (const { keyboard, callback } of keyboards) {
+      const buttons = keyboard.reply_markup.inline_keyboard.flat();
+      const labels = buttons.map((button) => button.text);
+      expect(labels).toContain("Этот месяц");
+      expect(labels).toContain("За 50 дней");
+      expect(labels).not.toContain("Прошлый месяц");
+      expect(labels).toContain("За 12 месяцев");
+      expect(buttons.find((button) => button.text === "За 50 дней")).toMatchObject({ callback_data: callback });
+    }
   });
 
   it("pagination keyboard shows next only on first page", () => {

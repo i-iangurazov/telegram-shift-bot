@@ -7,8 +7,21 @@ import {
 describe("reportPeriods", () => {
   it("parses known period keys", () => {
     expect(parseReportPeriodKey("30d")).toBe("30d");
+    expect(parseReportPeriodKey("50d")).toBe("50d");
     expect(parseReportPeriodKey("current_month")).toBe("current_month");
+    expect(parseReportPeriodKey("previous_month")).toBe("previous_month");
     expect(parseReportPeriodKey("unknown")).toBeNull();
+  });
+
+  it("resolves 50 days across the year boundary in Bishkek for reports and exports", () => {
+    const now = new Date("2026-01-01T18:01:23.456Z");
+    const resolved = resolveReportRangeToken({ token: "50d", timezone: "Asia/Bishkek", now });
+
+    expect(resolved?.periodKey).toBe("50d");
+    expect(resolved?.range.days).toBe(50);
+    expect(resolved?.range.from.toISOString()).toBe("2025-11-12T18:01:23.456Z");
+    expect(resolved?.range.to).toEqual(now);
+    expect(resolved!.range.to.getTime() - resolved!.range.from.getTime()).toBe(50 * 24 * 60 * 60 * 1000);
   });
 
   it("builds current and previous month ranges", () => {

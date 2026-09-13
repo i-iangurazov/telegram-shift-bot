@@ -60,7 +60,7 @@ export const buildEmployeePeriodKeyboard = (params: {
       Markup.button.callback("Этот месяц", `period_emp:current_month:${params.employeeId}`)
     ],
     [
-      Markup.button.callback("Прошлый месяц", `period_emp:previous_month:${params.employeeId}`),
+      Markup.button.callback("За 50 дней", `period_emp:50d:${params.employeeId}`),
       Markup.button.callback("За 12 месяцев", `period_emp:12m:${params.employeeId}`)
     ],
     [Markup.button.callback("Назад", backCallback)]
@@ -105,7 +105,7 @@ export const buildAllPeriodKeyboard = (): ReturnType<typeof Markup.inlineKeyboar
       Markup.button.callback("Этот месяц", "period_all:current_month")
     ],
     [
-      Markup.button.callback("Прошлый месяц", "period_all:previous_month"),
+      Markup.button.callback("За 50 дней", "period_all:50d"),
       Markup.button.callback("За 12 месяцев", "period_all:12m")
     ]
   ]);
